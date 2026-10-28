@@ -1,0 +1,12 @@
+{
+  "rules": [
+    {"id": "internet-exposed", "when": {"tag": "exposed"}, "add": 1.5,
+     "reason": "service is reachable from outside the host"},
+    {"id": "known-exploit", "when": {"tag": "exploit-available"}, "add": 2.0,
+     "reason": "a public exploit exists"},
+    {"id": "crown-jewel", "when": {"tag": "sensitive-data"}, "multiply": 1.2,
+     "reason": "asset holds sensitive data"},
+    {"id": "info-only", "when": {"tag": "informational"}, "multiply": 0.3,
+     "reason": "informational finding, low direct impact"}
+  ]
+}

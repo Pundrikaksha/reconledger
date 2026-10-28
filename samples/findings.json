@@ -1,0 +1,8 @@
+{
+  "findings": [
+    {"id": "F1", "source": "portscan", "target": "127.0.0.1:3000", "title": "Outdated web framework", "severity": 6.5, "tags": ["exposed", "exploit-available"]},
+    {"id": "F2", "source": "headers", "target": "127.0.0.1:3000", "title": "Missing Content-Security-Policy", "severity": 4.0, "tags": ["exposed"]},
+    {"id": "F3", "source": "depscan", "target": "127.0.0.1:3000", "title": "Outdated web framework", "severity": 7.0, "tags": ["sensitive-data"]},
+    {"id": "F4", "source": "portscan", "target": "127.0.0.1:22", "title": "SSH banner disclosed", "severity": 2.0, "tags": ["informational"]}
+  ]
+}
