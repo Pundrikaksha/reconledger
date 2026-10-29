@@ -1,0 +1,12 @@
+{"ts": 1793270328.181, "event": "run_start", "initial": 0}
+{"ts": 1793270328.182, "event": "round", "n": 1, "actions": ["nmap_scan", "header_check"]}
+{"ts": 1793270328.182, "event": "planned", "action": "nmap_scan", "kind": "active", "target": "127.0.0.1", "reason": "discover which lab services listen on ports 3000,4280"}
+{"ts": 1793270328.182, "event": "approval", "action": "nmap_scan", "target": "127.0.0.1", "approved": true, "by": "cli-operator", "risk_note": "TCP connect scan; sends connection attempts to the lab host only"}
+{"ts": 1793270328.225, "event": "executed", "action": "nmap_scan", "target": "127.0.0.1", "new_findings": 1}
+{"ts": 1793270328.225, "event": "planned", "action": "header_check", "kind": "active", "target": "http://example.com/", "reason": "operator-supplied extra target"}
+{"ts": 1793270328.226, "event": "blocked_scope", "action": "header_check", "target": "http://example.com/", "error": "target 'http://example.com/' is outside the lab scope"}
+{"ts": 1793270328.226, "event": "round", "n": 2, "actions": ["header_check"]}
+{"ts": 1793270328.226, "event": "planned", "action": "header_check", "kind": "active", "target": "http://127.0.0.1:3000/", "reason": "Open port 3000/tcp (service guess: ppp) looks like a web app; check its HTTP security headers"}
+{"ts": 1793270328.226, "event": "approval", "action": "header_check", "target": "http://127.0.0.1:3000/", "approved": true, "by": "cli-operator", "risk_note": "one HTTP GET to the lab app; no payloads"}
+{"ts": 1793270328.24, "event": "executed", "action": "header_check", "target": "http://127.0.0.1:3000/", "new_findings": 4}
+{"ts": 1793270328.241, "event": "ranked", "count": 5, "top": [["hdr-127.0.0.1:3000-content-security-policy", 7.0], ["hdr-127.0.0.1:3000-cors-wildcard", 6.5], ["nmap-127.0.0.1-3000", 5.5], ["hdr-127.0.0.1:3000-plain-http", 5.0], ["hdr-127.0.0.1:3000-referrer-policy", 3.0]]}

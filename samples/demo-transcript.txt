@@ -1,0 +1,10 @@
+
+[APPROVAL NEEDED] nmap_scan -> 127.0.0.1
+  reason: discover which lab services listen on ports 3000,4280
+  risk:   TCP connect scan; sends connection attempts to the lab host only
+  approve? [y/N] 
+[APPROVAL NEEDED] header_check -> http://127.0.0.1:3000/
+  reason: Open port 3000/tcp (service guess: ppp) looks like a web app; check its HTTP security headers
+  risk:   one HTTP GET to the lab app; no payloads
+  approve? [y/N] 5 findings | executed 2 | skipped 0 | blocked 1 | errors 0
+report written to samples/demo-report.md

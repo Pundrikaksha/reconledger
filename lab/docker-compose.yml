@@ -1,0 +1,19 @@
+# ReconLedger sandbox lab. Every port is bound to 127.0.0.1 ONLY.
+# These apps are deliberately vulnerable: never expose them to a network.
+#   docker compose -f lab/docker-compose.yml up -d             # Juice Shop
+#   docker compose -f lab/docker-compose.yml --profile dvwa up -d   # + DVWA
+#   docker compose -f lab/docker-compose.yml down
+services:
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    container_name: rl-juice
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: "no"
+  dvwa:
+    image: vulnerables/web-dvwa:latest
+    container_name: rl-dvwa
+    profiles: ["dvwa"]
+    ports:
+      - "127.0.0.1:4280:80"
+    restart: "no"

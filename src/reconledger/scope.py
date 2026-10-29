@@ -17,9 +17,16 @@ class ScopeGuard:
         self.nets: list[ipaddress._BaseNetwork] = []
         for item in allow or DEFAULT_ALLOW:
             try:
-                self.nets.append(ipaddress.ip_network(item, strict=False))
+                net = ipaddress.ip_network(item, strict=False)
             except ValueError:
-                self.hosts.add(item.lower())
+                if item.lower() != "localhost":
+                    raise ValueError(f"only 'localhost' or IP ranges may be allow-listed, got {item!r}")
+                self.hosts.add("localhost")
+                continue
+            # Lab only: loopback or private ranges. Public ranges are refused outright.
+            if not (net.is_loopback or net.is_private) or net.prefixlen < 8:
+                raise ValueError(f"{item!r} is not a loopback/private lab range")
+            self.nets.append(net)
 
     @staticmethod
     def _host(target: str) -> str:

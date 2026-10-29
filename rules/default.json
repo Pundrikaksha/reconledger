@@ -1,11 +1,19 @@
 {
   "rules": [
-    {"id": "internet-exposed", "when": {"tag": "exposed"}, "add": 1.5,
-     "reason": "service is reachable from outside the host"},
+    {"id": "listening-service", "when": {"tag": "exposed"}, "add": 1.5,
+     "reason": "service is listening and reachable"},
     {"id": "known-exploit", "when": {"tag": "exploit-available"}, "add": 2.0,
      "reason": "a public exploit exists"},
     {"id": "crown-jewel", "when": {"tag": "sensitive-data"}, "multiply": 1.2,
      "reason": "asset holds sensitive data"},
+    {"id": "confirmed-reachable", "when": {"tag": "confirmed-open"}, "add": 1.0,
+     "reason": "port scan confirms the weak service is actually reachable"},
+    {"id": "port-with-weaknesses", "when": {"tag": "has-weaknesses"}, "add": 1.0,
+     "reason": "open port fronts an app with misconfigurations"},
+    {"id": "xss-surface", "when": {"tag": "xss-risk"}, "add": 1.0,
+     "reason": "missing CSP leaves injected scripts unrestricted"},
+    {"id": "cors-wide-open", "when": {"tag": "cors"}, "add": 0.5,
+     "reason": "any website can read responses from this app"},
     {"id": "info-only", "when": {"tag": "informational"}, "multiply": 0.3,
      "reason": "informational finding, low direct impact"}
   ]

@@ -50,3 +50,9 @@ def dedupe(findings: list[Finding]) -> list[Finding]:
         if f.source not in m.source.split("+"):
             m.source = f"{m.source}+{f.source}"
     return list(merged.values())
+
+
+@parser("nmap-xml")
+def parse_nmap_xml(text: str) -> list[Finding]:
+    from .tools.nmap import parse_xml
+    return parse_xml(text)

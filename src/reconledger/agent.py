@@ -1,9 +1,11 @@
-"""Agent loop: plan -> (approve) -> act -> correlate -> rank -> report.
+"""Agent loop: plan -> scope check -> (approve) -> act -> correlate -> rank.
 
-Passive steps run on their own. Active steps are checked against the scope
-guard and then stopped for human approval. Everything is audited. The planner
-is pluggable: a deterministic mock planner by default (no API keys), with an
-LLM planner to be added behind the same interface.
+The loop runs in rounds: after each round the planner sees every finding so far
+and may propose follow-up actions (e.g. header checks on ports nmap found open).
+Passive steps run on their own. Every action is scope-checked first, and every
+ACTIVE action stops for human approval. Everything is audited. The planner is
+pluggable: deterministic planners by default (no API keys); an LLM planner can
+sit behind the same interface.
 """
 from __future__ import annotations
 
@@ -12,6 +14,7 @@ from typing import Callable, Protocol
 
 from .approval import Approver, deny_all
 from .audit import AuditLog
+from .correlate import correlate
 from .ingest import dedupe
 from .models import ActionKind, Finding, PlannedAction
 from .rules import RulesEngine
@@ -32,6 +35,31 @@ class MockPlanner:
         return list(self.actions)
 
 
+class LabPlanner:
+    """Rule-based planner for the localhost lab.
+
+    Round 1: port scan the lab host (active).
+    Round 2+: HTTP security-header check on every open web port (active).
+    """
+
+    def __init__(self, host: str, ports: str):
+        self.host, self.ports = host, ports
+
+    def plan(self, findings: list[Finding]) -> list[PlannedAction]:
+        actions = [PlannedAction(
+            "nmap_scan", ActionKind.ACTIVE, self.host,
+            reason=f"discover which lab services listen on ports {self.ports}",
+            risk_note="TCP connect scan; sends connection attempts to the lab host only",
+            params={"ports": self.ports})]
+        for f in findings:
+            if f.source.startswith("nmap") and "web" in f.tags:
+                actions.append(PlannedAction(
+                    "header_check", ActionKind.ACTIVE, f"http://{f.target}/",
+                    reason=f"{f.title} looks like a web app; check its HTTP security headers",
+                    risk_note="one HTTP GET to the lab app; no payloads"))
+        return actions
+
+
 Tool = Callable[[PlannedAction], list[Finding]]
 
 
@@ -41,6 +69,7 @@ class RunResult:
     executed: list[str] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
     blocked: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
 
 class Agent:
@@ -52,6 +81,7 @@ class Agent:
         approver: Approver = deny_all,
         tools: dict[str, Tool] | None = None,
         audit: AuditLog | None = None,
+        max_rounds: int = 5,
     ):
         self.rules = rules
         self.scope = scope or ScopeGuard()
@@ -59,39 +89,56 @@ class Agent:
         self.approver = approver
         self.tools = tools or {}
         self.audit = audit or AuditLog()
+        self.max_rounds = max_rounds
+
+    def _step(self, action: PlannedAction, result: RunResult) -> list[Finding]:
+        self.audit.record("planned", action=action.name, kind=action.kind.value,
+                          target=action.target, reason=action.reason)
+        try:
+            self.scope.check(action.target)
+        except OutOfScopeError as exc:
+            self.audit.record("blocked_scope", action=action.name, target=action.target, error=str(exc))
+            result.blocked.append(action.name)
+            return []
+        if action.kind is ActionKind.ACTIVE:
+            ok, who = self.approver(action)
+            self.audit.record("approval", action=action.name, target=action.target,
+                              approved=ok, by=who, risk_note=action.risk_note)
+            if not ok:
+                result.skipped.append(action.name)
+                return []
+        tool = self.tools.get(action.name)
+        if tool is None:
+            self.audit.record("no_tool", action=action.name)
+            result.skipped.append(action.name)
+            return []
+        try:
+            new = tool(action)
+        except Exception as exc:  # a failing tool must not kill the run
+            self.audit.record("tool_error", action=action.name, error=repr(exc))
+            result.errors.append(f"{action.name}: {exc}")
+            return []
+        self.audit.record("executed", action=action.name, target=action.target,
+                          new_findings=len(new))
+        result.executed.append(action.name)
+        return new
 
     def run(self, initial: list[Finding]) -> RunResult:
         findings = list(initial)
         result = RunResult(findings=[])
+        seen: set[tuple[str, str]] = set()
         self.audit.record("run_start", initial=len(findings))
 
-        for action in self.planner.plan(findings):
-            self.audit.record("planned", action=action.name, kind=action.kind.value,
-                              target=action.target, reason=action.reason)
-            try:
-                self.scope.check(action.target)
-            except OutOfScopeError as exc:
-                self.audit.record("blocked_scope", action=action.name, error=str(exc))
-                result.blocked.append(action.name)
-                continue
-            if action.kind is ActionKind.ACTIVE:
-                ok, who = self.approver(action)
-                self.audit.record("approval", action=action.name, approved=ok, by=who,
-                                  risk_note=action.risk_note)
-                if not ok:
-                    result.skipped.append(action.name)
-                    continue
-            tool = self.tools.get(action.name)
-            if tool is None:
-                self.audit.record("no_tool", action=action.name)
-                result.skipped.append(action.name)
-                continue
-            new = tool(action)
-            self.audit.record("executed", action=action.name, new_findings=len(new))
-            result.executed.append(action.name)
-            findings.extend(new)
+        for rnd in range(1, self.max_rounds + 1):
+            todo = [a for a in self.planner.plan(findings) if (a.name, a.target) not in seen]
+            if not todo:
+                break
+            self.audit.record("round", n=rnd, actions=[a.name for a in todo])
+            for action in todo:
+                seen.add((action.name, action.target))
+                findings.extend(self._step(action, result))
 
-        merged = dedupe(findings)
+        merged = correlate(dedupe(findings))
         for f in merged:
             self.rules.score(f)
         merged.sort(key=lambda f: f.score, reverse=True)
