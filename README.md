@@ -48,7 +48,7 @@ How the PS1 mandatory prototype requirements map to the code. "Live" means it ru
 Named tools beyond the mandatory three: **OWASP ZAP, Nessus/OpenVAS, Burp Suite and Metasploit are planned, not implemented** (see the table above). Metasploit, if added, stays lab-only behind per-module human approval.
 
 ## Demo
-- **Video:** `demo/reconledger-demo.mp4` in the HackTheCore entry package (57 s, 1280x720, no audio). **Drive link: to be added.**
+- **Video:** `demo/reconledger-demo.mp4` in the HackTheCore entry package (57 s, 1280x720, no audio). **Drive link:** [ReconLedger-HackTheCore-demo.mp4](https://drive.google.com/file/d/1m2FCbeYmuLR_j-11Jb_I5iorajH1WDLw/view) (private until sharing is set to anyone-with-link before submission).
 - **What it shows:** one interactive `reconledger assess` against Juice Shop on 127.0.0.1:3000: live `[APPROVAL NEEDED] … approve? [y/N]` prompts for nmap_scan, header_check and nikto_scan; `[SCOPE BLOCKED] header_check -> http://example.com/ … (no request sent)`; per-tool `[RUNNING]`/`[DONE]` lines; then the summary, top findings and report files. Run time 73.8 s (Nikto 63.1 s); 30 findings (3 High, 3 Medium, 3 Low, 21 Info).
 - **Honesty note:** the `y` answers at the approval prompts were **typed by a script** (a pexpect driver that answers `y` only for 127.0.0.1 targets), not by a person at the keyboard. The prompts, tool runs and output are real. Idle stretches over 4 s (mostly the Nikto wait) are cut and playback is 0.6x; an on-screen line marks the Nikto cut.
 
