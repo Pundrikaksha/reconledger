@@ -29,15 +29,53 @@
 | Burp Suite | web | planned | planned | XML issue import |
 | Metasploit | exploitation | planned | n/a | lab-only, per-module human approval |
 
+## Track 1 (AI VAPT) fit
+How the PS1 mandatory prototype requirements map to the code. "Live" means it runs against the lab today; "planned" means it is not implemented yet.
+
+| PS1 mandatory requirement | Where it is | Status |
+|---|---|---|
+| Scope validation | `src/reconledger/scope.py` (`ScopeGuard`: loopback/private only, public ranges refused at start-up); checked again in `agent.py` (`Agent._step`) and inside each runner in `tools/` | live |
+| Auditable plan | `agent.py` (`Planner` interface, round-based `LabPlanner`, reason + risk note per `PlannedAction` in `models.py`); `audit.py` JSONL trail; Appendix A of the report | live |
+| ≥3 working tool integrations covering network + web | Network: Nmap (`tools/nmap.py`). Web: HTTP header check (`tools/headers.py`) and Nikto (`tools/nikto.py`). Imports: `nmap-xml`, `nikto-json`, `generic-json` (`ingest.py`). Bound to actions in `runners.py` | live (3 tools + 3 import formats) |
+| Common finding schema | `models.py` (`Finding`: id, source, target, title, severity, tags, evidence, score, reasons); every parser emits it | live |
+| Evidence links | `Finding.evidence` (URL, port, header, Nikto item, re-fetch result), printed per finding in the report | live |
+| Duplicate handling | `ingest.py` (`dedupe`) + `correlate.py` (cross-tool merges such as `headers+nikto`, multi-tool and `confirmed-open` boosts) | live |
+| Risk ranking | `rules.py` + `rules/default.json` (rule-based 0–10 score, **not CVSS**), soft-404 down-ranking in `tools/nikto.py`, explain-why in `explain.py` | live |
+| Professional downloadable PDF report (PS1 §7) | `report.py` (`to_pdf`, pure-Python `fpdf2`): executive summary and scope, methodology, severity distribution, detailed findings (CWE/OWASP, evidence, confidence, validation, fix), impact and remediation, limitations, Appendix A plan/approval/audit. DRAFT until `--sign-off` | live |
+| Analyst approval gate | `approval.py` (`cli_approver` y/N prompt with reason + risk note, `deny_all`, `plan_file_approver` for `--approve-plan`); every ACTIVE action stops in `Agent._step` | live |
+| Conversational request | CLI request (`reconledger assess` / `triage`, `cli.py`) with prompts and plain-language progress; the planner is rule-based today, an LLM planner plugs into the same `Planner` interface | partial (no free-text chat yet) |
+
+Named tools beyond the mandatory three: **OWASP ZAP, Nessus/OpenVAS, Burp Suite and Metasploit are planned, not implemented** (see the table above). Metasploit, if added, stays lab-only behind per-module human approval.
+
+## Demo
+- **Video:** `demo/reconledger-demo.mp4` in the HackTheCore entry package (57 s, 1280x720, no audio). **Drive link: to be added.**
+- **What it shows:** one interactive `reconledger assess` against Juice Shop on 127.0.0.1:3000: live `[APPROVAL NEEDED] … approve? [y/N]` prompts for nmap_scan, header_check and nikto_scan; `[SCOPE BLOCKED] header_check -> http://example.com/ … (no request sent)`; per-tool `[RUNNING]`/`[DONE]` lines; then the summary, top findings and report files. Run time 73.8 s (Nikto 63.1 s); 30 findings (3 High, 3 Medium, 3 Low, 21 Info).
+- **Honesty note:** the `y` answers at the approval prompts were **typed by a script** (a pexpect driver that answers `y` only for 127.0.0.1 targets), not by a person at the keyboard. The prompts, tool runs and output are real. Idle stretches over 4 s (mostly the Nikto wait) are cut and playback is 0.6x; an on-screen line marks the Nikto cut.
+
 ## Setup
-Requires Python 3.11+, nmap, Perl (for Nikto) and Docker with Compose (for the lab).
+Requires Python 3.11+. Live scans also need `nmap` and Perl (for Nikto). The optional lab needs Docker with Compose.
+
+**Option A: pipx (just the CLI)**
+```bash
+pipx install .                 # from a clone of this repo
+reconledger --help
+```
+
+**Option B: venv (development, runs the tests)**
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 pytest -q                      # unit + loop tests (no Docker, nmap or Nikto needed)
+```
+
+**Optional live tools**
+```bash
+sudo apt-get install -y nmap   # or brew install nmap
 git clone --depth 1 https://github.com/sullo/nikto /opt/nikto   # Nikto (needs Perl + XML::Writer)
 export RECONLEDGER_NIKTO=/opt/nikto/program/nikto.pl
 ```
+
+**Optional local lab (127.0.0.1 only):** OWASP Juice Shop (and optionally DVWA) via Docker, see the next section. Without Docker you can run a Juice Shop release locally, but make sure it is reachable only from 127.0.0.1 (host firewall or a loopback-only bind). Never expose these deliberately vulnerable apps on a public interface, and never point ReconLedger at a host you are not authorised to test.
 
 ## Run the lab (localhost only)
 ```bash
@@ -104,6 +142,7 @@ All security testing runs only against the local sandboxed lab. ReconLedger neve
 - Severity is a rules-based 0-10 score, not a computed CVSS vector.
 - Nikto signatures are noisy on single-page apps; validation down-ranks but never deletes them.
 - ZAP, Nessus/OpenVAS, Burp and Metasploit are planned, not implemented.
+- The planner is rule-based (`LabPlanner`); a free-text conversational / LLM planner is not built yet.
 
 ## License
 MIT. See [LICENSE](LICENSE).
