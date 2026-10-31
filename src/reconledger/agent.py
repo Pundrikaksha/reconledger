@@ -9,6 +9,8 @@ sit behind the same interface.
 """
 from __future__ import annotations
 
+import time
+
 from dataclasses import dataclass, field
 from typing import Callable, Protocol
 
@@ -91,6 +93,7 @@ class Agent:
         tools: dict[str, Tool] | None = None,
         audit: AuditLog | None = None,
         max_rounds: int = 5,
+        progress=None,
     ):
         self.rules = rules
         self.scope = scope or ScopeGuard()
@@ -99,6 +102,11 @@ class Agent:
         self.tools = tools or {}
         self.audit = audit or AuditLog()
         self.max_rounds = max_rounds
+        self.progress = progress  # optional callable(str) for live terminal status
+
+    def _say(self, msg: str) -> None:
+        if self.progress:
+            self.progress(msg)
 
     def _step(self, action: PlannedAction, result: RunResult) -> list[Finding]:
         self.audit.record("planned", action=action.name, kind=action.kind.value,
@@ -108,6 +116,7 @@ class Agent:
         except OutOfScopeError as exc:
             self.audit.record("blocked_scope", action=action.name, target=action.target, error=str(exc))
             result.blocked.append(action.name)
+            self._say(f"\n[SCOPE BLOCKED] {action.name} -> {action.target}: {exc} (no request sent)")
             return []
         if action.kind is ActionKind.ACTIVE:
             ok, who = self.approver(action)
@@ -121,12 +130,16 @@ class Agent:
             self.audit.record("no_tool", action=action.name)
             result.skipped.append(action.name)
             return []
+        self._say(f"[RUNNING] {action.name} -> {action.target} ...")
+        t0 = time.monotonic()
         try:
             new = tool(action)
         except Exception as exc:  # a failing tool must not kill the run
             self.audit.record("tool_error", action=action.name, error=repr(exc))
             result.errors.append(f"{action.name}: {exc}")
+            self._say(f"[TOOL ERROR] {action.name}: {exc}")
             return []
+        self._say(f"[DONE] {action.name}: {len(new)} raw finding(s) in {time.monotonic() - t0:.1f}s")
         self.audit.record("executed", action=action.name, target=action.target,
                           new_findings=len(new))
         result.executed.append(action.name)
@@ -143,6 +156,7 @@ class Agent:
             if not todo:
                 break
             self.audit.record("round", n=rnd, actions=[a.name for a in todo])
+            self._say(f"\n== round {rnd}: planner proposes {', '.join(a.name for a in todo)} ==")
             for action in todo:
                 seen.add((action.name, action.target))
                 findings.extend(self._step(action, result))

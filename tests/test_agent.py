@@ -54,3 +54,22 @@ def test_sample_dedup_and_rank():
     assert res.findings[-1].title == "SSH banner disclosed"
     md = to_markdown(res.findings)
     assert "Detailed findings (with explain-why)" in md and "Exploitability:" in md
+
+
+def test_progress_reports_scope_block_without_running():
+    from reconledger.agent import Agent, MockPlanner
+    from reconledger.models import ActionKind, PlannedAction
+    from reconledger.scope import ScopeGuard
+
+    class P:
+        def plan(self, findings):
+            return [PlannedAction(name="header_check", kind=ActionKind.ACTIVE,
+                                  target="http://example.com/", reason="demo")]
+    called, lines = [], []
+    agent = Agent(RULES, scope=ScopeGuard(), planner=P(),
+                  approver=lambda a: (True, "t"),
+                  tools={"header_check": lambda a: called.append(a) or []},
+                  progress=lines.append)
+    res = agent.run([])
+    assert res.blocked == ["header_check"] and not called
+    assert any(l.strip().startswith("[SCOPE BLOCKED] header_check -> http://example.com/") for l in lines)

@@ -103,7 +103,8 @@ def main(argv: list[str] | None = None) -> int:
         approver = cli_approver()
     audit = AuditLog(args.audit)
     agent = Agent(rules, scope=scope, planner=planner, approver=approver,
-                  tools=lab_tools(scope), audit=audit)
+                  tools=lab_tools(scope), audit=audit,
+                  progress=lambda m: print(m, flush=True))
     started = datetime.now(timezone.utc).astimezone()
     t0 = time.monotonic()
     res = agent.run([])
