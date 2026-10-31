@@ -1,20 +1,108 @@
 {
   "rules": [
-    {"id": "listening-service", "when": {"tag": "exposed"}, "add": 1.5,
-     "reason": "service is listening and reachable"},
-    {"id": "known-exploit", "when": {"tag": "exploit-available"}, "add": 2.0,
-     "reason": "a public exploit exists"},
-    {"id": "crown-jewel", "when": {"tag": "sensitive-data"}, "multiply": 1.2,
-     "reason": "asset holds sensitive data"},
-    {"id": "confirmed-reachable", "when": {"tag": "confirmed-open"}, "add": 1.0,
-     "reason": "port scan confirms the weak service is actually reachable"},
-    {"id": "port-with-weaknesses", "when": {"tag": "has-weaknesses"}, "add": 1.0,
-     "reason": "open port fronts an app with misconfigurations"},
-    {"id": "xss-surface", "when": {"tag": "xss-risk"}, "add": 1.0,
-     "reason": "missing CSP leaves injected scripts unrestricted"},
-    {"id": "cors-wide-open", "when": {"tag": "cors"}, "add": 0.5,
-     "reason": "any website can read responses from this app"},
-    {"id": "info-only", "when": {"tag": "informational"}, "multiply": 0.3,
-     "reason": "informational finding, low direct impact"}
+    {
+      "id": "listening-service",
+      "when": {
+        "tag": "exposed"
+      },
+      "add": 1.5,
+      "reason": "service is listening and reachable"
+    },
+    {
+      "id": "known-exploit",
+      "when": {
+        "tag": "exploit-available"
+      },
+      "add": 2.0,
+      "reason": "a public exploit exists"
+    },
+    {
+      "id": "crown-jewel",
+      "when": {
+        "tag": "sensitive-data"
+      },
+      "multiply": 1.2,
+      "reason": "asset holds sensitive data"
+    },
+    {
+      "id": "confirmed-reachable",
+      "when": {
+        "tag": "confirmed-open"
+      },
+      "add": 1.0,
+      "reason": "port scan confirms the weak service is actually reachable"
+    },
+    {
+      "id": "port-with-weaknesses",
+      "when": {
+        "tag": "has-weaknesses"
+      },
+      "add": 1.0,
+      "reason": "open port fronts an app with misconfigurations"
+    },
+    {
+      "id": "xss-surface",
+      "when": {
+        "tag": "xss-risk"
+      },
+      "add": 1.0,
+      "reason": "missing CSP leaves injected scripts unrestricted"
+    },
+    {
+      "id": "cors-wide-open",
+      "when": {
+        "tag": "cors"
+      },
+      "add": 0.5,
+      "reason": "any website can read responses from this app"
+    },
+    {
+      "id": "info-only",
+      "when": {
+        "tag": "informational"
+      },
+      "multiply": 0.3,
+      "reason": "informational finding, low direct impact"
+    },
+    {
+      "id": "exposed-sensitive-path",
+      "when": {
+        "tag": "sensitive-file"
+      },
+      "add": 1.0,
+      "reason": "path may expose data to unauthenticated users"
+    },
+    {
+      "id": "validated-exposure",
+      "when": {
+        "tag": "validated"
+      },
+      "add": 1.0,
+      "reason": "re-fetch confirmed real, distinct content at this path"
+    },
+    {
+      "id": "known-vulnerable",
+      "when": {
+        "tag": "known-vuln"
+      },
+      "add": 1.0,
+      "reason": "signature references a published CVE"
+    },
+    {
+      "id": "likely-false-positive",
+      "when": {
+        "tag": "soft-404"
+      },
+      "multiply": 0.1,
+      "reason": "validation: same body as a random non-existent path (SPA catch-all), so likely not real"
+    },
+    {
+      "id": "multi-tool-agreement",
+      "when": {
+        "source_count_min": 2
+      },
+      "add": 0.5,
+      "reason": "two independent tools reported the same issue"
+    }
   ]
 }

@@ -39,11 +39,12 @@ class LabPlanner:
     """Rule-based planner for the localhost lab.
 
     Round 1: port scan the lab host (active).
-    Round 2+: HTTP security-header check on every open web port (active).
+    Round 2+: for every open web port: HTTP security-header check (cheap, one GET)
+    and a Nikto web scan (heavier, safe tuning only). Both need approval.
     """
 
-    def __init__(self, host: str, ports: str):
-        self.host, self.ports = host, ports
+    def __init__(self, host: str, ports: str, nikto: bool = True):
+        self.host, self.ports, self.nikto = host, ports, nikto
 
     def plan(self, findings: list[Finding]) -> list[PlannedAction]:
         actions = [PlannedAction(
@@ -57,6 +58,14 @@ class LabPlanner:
                     "header_check", ActionKind.ACTIVE, f"http://{f.target}/",
                     reason=f"{f.title} looks like a web app; check its HTTP security headers",
                     risk_note="one HTTP GET to the lab app; no payloads"))
+                if self.nikto:
+                    actions.append(PlannedAction(
+                        "nikto_scan", ActionKind.ACTIVE, f"http://{f.target}/",
+                        reason=(f"{f.title} is a web service; header checks only see one response, "
+                                "so run Nikto to look for exposed files, directories and known-bad "
+                                "components, then validate its hits against a soft-404 baseline"),
+                        risk_note=("~5,000 HTTP requests to the lab app over up to 3 minutes; safe "
+                                   "tuning 0123b (no injection or DoS checks)")))
         return actions
 
 

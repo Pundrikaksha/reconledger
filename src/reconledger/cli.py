@@ -2,19 +2,21 @@
 
   reconledger triage samples/findings.json            # passive: score + rank existing findings
   reconledger assess --target 127.0.0.1 --ports 3000  # lab loop: plan -> approve -> scan -> rank
+  reconledger assess ... --non-interactive --approve-plan approved-plan.json --pdf out/report.pdf
 """
 from __future__ import annotations
 
 import argparse
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from .agent import Agent, LabPlanner
-from .approval import cli_approver, deny_all
+from .approval import cli_approver, deny_all, plan_file_approver
 from .audit import AuditLog
 from .ingest import load
-from .report import to_markdown
+from .report import to_markdown, to_pdf
 from .rules import JsonRulesEngine
 from .runners import lab_tools
 from .scope import OutOfScopeError, ScopeGuard
@@ -38,7 +40,8 @@ def main(argv: list[str] | None = None) -> int:
 
     t = sub.add_parser("triage", help="ingest findings, score, rank and report (passive only)")
     t.add_argument("input")
-    t.add_argument("--format", default="generic-json")
+    t.add_argument("--format", default="generic-json", help="generic-json | nmap-xml | nikto-json")
+    t.add_argument("--pdf", default=None, help="also write a PDF report here")
     t.add_argument("--rules", default=DEFAULT_RULES)
     t.add_argument("--audit", default=None, help="path to write JSONL audit trail")
     t.add_argument("--out", default=None, help="write Markdown report here (default stdout)")
@@ -54,14 +57,22 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--audit", default=None)
     a.add_argument("--out", default=None)
     a.add_argument("--non-interactive", action="store_true",
-                   help="deny every active step (dry run)")
+                   help="no prompts: deny every active step unless --approve-plan pre-approves it")
+    a.add_argument("--approve-plan", default=None,
+                   help="analyst-signed JSON of (action, target-pattern) pairs allowed to run")
+    a.add_argument("--pdf", default=None, help="also write the PDF VAPT report here")
+    a.add_argument("--sign-off", default=None,
+                   help="analyst name approving the final report (otherwise it stays DRAFT)")
+    a.add_argument("--no-nikto", action="store_true", help="do not plan Nikto scans")
     args = p.parse_args(argv)
 
     rules = JsonRulesEngine.from_file(args.rules)
     if args.cmd == "triage":
         agent = Agent(rules=rules, audit=AuditLog(args.audit))
         result = agent.run(load(args.input, args.format))
-        _emit(to_markdown(result.findings), args.out)
+        _emit(to_markdown(result.findings, events=agent.audit.events), args.out)
+        if args.pdf:
+            to_pdf(result.findings, args.pdf, "ReconLedger triage report", None, agent.audit.events)
         return 0
 
     scope = ScopeGuard((args.scope or []) + ["127.0.0.0/8", "localhost", "::1/128"])
@@ -71,7 +82,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"refusing to run: {exc}", file=sys.stderr)
         return 2
 
-    base = LabPlanner(args.target, args.ports)
+    base = LabPlanner(args.target, args.ports, nikto=not args.no_nikto)
     if args.extra_target:
         from .models import ActionKind, PlannedAction
 
@@ -84,15 +95,27 @@ def main(argv: list[str] | None = None) -> int:
     else:
         planner = base
 
-    approver = deny_all if args.non_interactive else cli_approver()
+    if args.approve_plan:
+        approver = plan_file_approver(args.approve_plan)
+    elif args.non_interactive:
+        approver = deny_all
+    else:
+        approver = cli_approver()
     audit = AuditLog(args.audit)
     agent = Agent(rules, scope=scope, planner=planner, approver=approver,
                   tools=lab_tools(scope), audit=audit)
     started = datetime.now(timezone.utc).astimezone()
+    t0 = time.monotonic()
     res = agent.run([])
+    elapsed = time.monotonic() - t0
+    finished = datetime.now(timezone.utc).astimezone()
     approvals = [e for e in audit.events if e["event"] == "approval"]
     meta = {
-        "started": started.strftime("%d %b %Y %H:%M %Z"),
+        "report status": (f"APPROVED by analyst {args.sign_off} at {finished:%d %b %Y %H:%M %Z}"
+                          if args.sign_off else "DRAFT - pending analyst review"),
+        "started": started.strftime("%d %b %Y %H:%M:%S %Z"),
+        "finished": finished.strftime("%d %b %Y %H:%M:%S %Z"),
+        "run time": f"{elapsed:.1f} s",
         "target": f"{args.target} ports {args.ports} (localhost lab)",
         "scope allow-list": ", ".join(str(n) for n in scope.nets) + ", localhost",
         "active steps approved / asked": f"{sum(e['approved'] for e in approvals)} / {len(approvals)}",
@@ -104,7 +127,11 @@ def main(argv: list[str] | None = None) -> int:
         "tool errors": "; ".join(res.errors) or "none",
         "findings": len(res.findings),
     }
-    _emit(to_markdown(res.findings, "ReconLedger lab assessment", meta), args.out)
+    _emit(to_markdown(res.findings, "ReconLedger lab assessment", meta, audit.events), args.out)
+    if args.pdf:
+        Path(args.pdf).parent.mkdir(parents=True, exist_ok=True)
+        to_pdf(res.findings, args.pdf, "ReconLedger VAPT report", meta, audit.events)
+        print(f"PDF report written to {args.pdf}")
     print(f"{len(res.findings)} findings | executed {len(res.executed)} | "
           f"skipped {len(res.skipped)} | blocked {len(res.blocked)} | errors {len(res.errors)}",
           file=sys.stderr)

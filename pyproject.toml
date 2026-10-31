@@ -9,7 +9,7 @@ description = "Human-approved AI triage agent for sandboxed security assessments
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11"
-dependencies = []
+dependencies = ["fpdf2>=2.7"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

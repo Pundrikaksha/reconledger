@@ -9,3 +9,5 @@ out/
 audit/*.jsonl
 .pytest_cache/
 *.egg-info/
+build/
+dist/

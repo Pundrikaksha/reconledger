@@ -1,0 +1,9 @@
+{
+  "analyst": "Lab analyst (The Unique Trader Team)",
+  "note": "Pre-approved plan for the unattended demo run. Only these steps on the loopback lab may run; anything else is denied.",
+  "approved": [
+    {"action": "nmap_scan", "target": "127.0.0.1", "reason": "TCP connect scan of lab ports"},
+    {"action": "header_check", "target": "http://127.0.0.1:*/", "reason": "one GET per lab web port"},
+    {"action": "nikto_scan", "target": "http://127.0.0.1:*/", "reason": "Nikto safe tuning 0123b on lab web ports"}
+  ]
+}

@@ -34,6 +34,8 @@ class Rule:
             return False
         if "title_contains" in w and w["title_contains"].lower() not in f.title.lower():
             return False
+        if "source_count_min" in w and len(f.source.split("+")) < int(w["source_count_min"]):
+            return False
         if "min_severity" in w and f.severity < float(w["min_severity"]):
             return False
         return True

@@ -29,3 +29,25 @@ def deny_all(action: PlannedAction) -> tuple[bool, str]:
 
 def approve_all_for_tests(action: PlannedAction) -> tuple[bool, str]:
     return True, "test-approver"
+
+
+def plan_file_approver(path: str) -> Approver:
+    """Pre-approved plan for unattended runs: the analyst signs a JSON file listing
+    exactly which (action, target-pattern) pairs may run. Anything else is denied.
+
+    {"analyst": "name", "approved": [{"action": "nmap_scan", "target": "127.0.0.1",
+                                      "reason": "why the analyst allows it"}]}
+    """
+    import fnmatch
+    import json
+    from pathlib import Path
+
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    who = f"plan-file:{data.get('analyst', 'unknown')}"
+    allowed = [(a["action"], a["target"]) for a in data.get("approved", [])]
+
+    def _check(action: PlannedAction) -> tuple[bool, str]:
+        ok = any(action.name == n and fnmatch.fnmatch(action.target, pat) for n, pat in allowed)
+        print(f"[APPROVAL {'GRANTED' if ok else 'DENIED'} by {who}] {action.name} -> {action.target}")
+        return ok, who
+    return _check

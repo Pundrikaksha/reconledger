@@ -68,9 +68,9 @@ def test_denied_scan_means_no_followups(port):
 
 
 def test_cli_prompt_controls_each_step(port, capsys):
-    answers = iter(["y", "n"])  # approve the scan, deny the header check
+    answers = iter(["y", "n", "n"])  # approve the scan, deny the header check and nikto
     scope = ScopeGuard()
     res = Agent(RULES, scope=scope, planner=LabPlanner("127.0.0.1", str(port)),
                 approver=cli_approver(lambda _p: next(answers)), tools=_tools(port, scope)).run([])
-    assert res.executed == ["nmap_scan"] and res.skipped == ["header_check"]
-    assert capsys.readouterr().out.count("[APPROVAL NEEDED]") == 2
+    assert res.executed == ["nmap_scan"] and res.skipped == ["header_check", "nikto_scan"]
+    assert capsys.readouterr().out.count("[APPROVAL NEEDED]") == 3

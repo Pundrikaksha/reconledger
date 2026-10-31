@@ -53,4 +53,4 @@ def test_sample_dedup_and_rank():
     assert res.findings[0].title == "Outdated web framework"
     assert res.findings[-1].title == "SSH banner disclosed"
     md = to_markdown(res.findings)
-    assert "Why each finding" in md
+    assert "Detailed findings (with explain-why)" in md and "Exploitability:" in md

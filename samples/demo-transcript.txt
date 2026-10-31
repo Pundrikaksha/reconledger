@@ -1,10 +1,7 @@
-
-[APPROVAL NEEDED] nmap_scan -> 127.0.0.1
-  reason: discover which lab services listen on ports 3000,4280
-  risk:   TCP connect scan; sends connection attempts to the lab host only
-  approve? [y/N] 
-[APPROVAL NEEDED] header_check -> http://127.0.0.1:3000/
-  reason: Open port 3000/tcp (service guess: ppp) looks like a web app; check its HTTP security headers
-  risk:   one HTTP GET to the lab app; no payloads
-  approve? [y/N] 5 findings | executed 2 | skipped 0 | blocked 1 | errors 0
+$ reconledger assess --target 127.0.0.1 --ports 3000,4280 --extra-target http://example.com/ --non-interactive --approve-plan samples/approved-plan.json --audit samples/demo-audit.jsonl --out samples/demo-report.md --pdf samples/demo-report.pdf
+[APPROVAL GRANTED by plan-file:Lab analyst (The Unique Trader Team)] nmap_scan -> 127.0.0.1
+[APPROVAL GRANTED by plan-file:Lab analyst (The Unique Trader Team)] header_check -> http://127.0.0.1:3000/
+[APPROVAL GRANTED by plan-file:Lab analyst (The Unique Trader Team)] nikto_scan -> http://127.0.0.1:3000/
 report written to samples/demo-report.md
+PDF report written to samples/demo-report.pdf
+30 findings | executed 3 | skipped 0 | blocked 1 | errors 0

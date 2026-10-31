@@ -4,7 +4,7 @@ from __future__ import annotations
 from .agent import Tool
 from .models import Finding, PlannedAction
 from .scope import ScopeGuard
-from .tools import headers, nmap
+from .tools import headers, nikto, nmap
 
 
 def lab_tools(scope: ScopeGuard) -> dict[str, Tool]:
@@ -15,4 +15,8 @@ def lab_tools(scope: ScopeGuard) -> dict[str, Tool]:
         _status, hdrs = headers.fetch(a.target, scope)
         return headers.parse(a.target, hdrs)
 
-    return {"nmap_scan": nmap_scan, "header_check": header_check}
+    def nikto_scan(a: PlannedAction) -> list[Finding]:
+        found = nikto.parse_json(nikto.run(a.target, scope))
+        return nikto.validate_soft404(a.target, found, scope)
+
+    return {"nmap_scan": nmap_scan, "header_check": header_check, "nikto_scan": nikto_scan}

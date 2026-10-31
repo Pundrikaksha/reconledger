@@ -1,7 +1,6 @@
 """Ingestion: turn tool outputs into Findings.
 
-Stub stage. Real parsers (nmap XML, nuclei JSON, header/TLS checks, SBOM) plug
-in here after the problem statement is known. Every parser is a pure function
+Import parsers: generic JSON, nmap XML, Nikto JSON. Every parser is a pure function
 (text -> list[Finding]) so it can be unit-tested on saved sample files.
 """
 from __future__ import annotations
@@ -49,6 +48,9 @@ def dedupe(findings: list[Finding]) -> list[Finding]:
         m.tags = sorted(set(m.tags) | set(f.tags))
         if f.source not in m.source.split("+"):
             m.source = f"{m.source}+{f.source}"
+            m.evidence.setdefault("also_reported_by", []).append(
+                {"source": f.source, "id": f.id,
+                 **{k: f.evidence[k] for k in ("url", "nikto_msg", "references") if k in f.evidence}})
     return list(merged.values())
 
 
@@ -56,3 +58,9 @@ def dedupe(findings: list[Finding]) -> list[Finding]:
 def parse_nmap_xml(text: str) -> list[Finding]:
     from .tools.nmap import parse_xml
     return parse_xml(text)
+
+
+@parser("nikto-json")
+def parse_nikto_json(text: str) -> list[Finding]:
+    from .tools.nikto import parse_json
+    return parse_json(text)
