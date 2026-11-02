@@ -27,6 +27,7 @@ METHODOLOGY = [
     "Correlation and ranking: duplicates merge across tools; findings on ports nmap confirmed open get context boosts; a JSON rules engine adjusts scores and records every reason.",
     "Human review: every active step needs analyst approval before it runs; the report stays DRAFT until an analyst signs it off.",
 ]
+SANDBOX_VULN_STEP = "Vulnerability analysis (§4-5): for each open web port the agent plans an HTTP security-header check. Each tool step runs in its own capped, throwaway container on an internal lab network."
 RULES_OF_ENGAGEMENT = [
     "Targets: only the organiser-authorised / local sandbox lab (loopback or private ranges). Public ranges and hostnames are refused at start-up and again inside each runner.",
     "Every active action (scan, HTTP probe) requires explicit human approval; denials are final for the run.",
@@ -66,7 +67,7 @@ def build(findings: list[Finding], meta: dict[str, Any] | None = None,
     approvals = [e for e in events if e.get("event") == "approval"]
     tool_runs = []
     for e in events:
-        if e.get("event") in {"executed", "tool_error", "no_tool", "blocked_scope"}:
+        if e.get("event") in {"executed", "tool_error", "no_tool", "blocked_scope", "scope_blocked"}:
             tool_runs.append(e)
         if e.get("event") == "approval" and not e.get("approved"):
             tool_runs.append({**e, "event": "denied"})
@@ -100,8 +101,9 @@ def _approval_line(ctx: dict) -> str:
 
 # ----------------------------------------------------------------- Markdown
 def to_markdown(findings: list[Finding], title: str = "ReconLedger report",
-                meta: dict[str, Any] | None = None, events: list[dict] | None = None) -> str:
-    ctx = build(findings, meta, events)
+                meta: dict[str, Any] | None = None, events: list[dict] | None = None,
+                llm=None) -> str:
+    ctx = build(findings, meta, events, llm=llm)
     L = [f"# {title}", ""]
     status = (meta or {}).get("report status")
     if status:
@@ -110,7 +112,10 @@ def to_markdown(findings: list[Finding], title: str = "ReconLedger report",
     for k, v in (meta or {}).items():
         L.append(f"- **{k}:** {v}")
     L += ["", "## 2. Assessment methodology", "", "**Method**", ""]
-    L += [f"{i}. {m}" for i, m in enumerate(METHODOLOGY, 1)]
+    sandboxed = _sandboxed(ctx["events"])
+    L += [f"{i}. {SANDBOX_VULN_STEP if sandboxed and m.startswith('Vulnerability analysis') else m}"
+          for i, m in enumerate(METHODOLOGY, 1)
+          if not (sandboxed and m.startswith("Validation"))]
     L += ["", "**Rules of engagement**", ""] + [f"- {r}" for r in RULES_OF_ENGAGEMENT]
     L += ["", "**Tool execution summary**", "", "| Time | Tool step | Target | Result |", "|---|---|---|---|"]
     for e in ctx["tool_runs"]:
@@ -173,13 +178,17 @@ def _run_result(e: dict) -> str:
         return f"FAILED: {e.get('error', '')[:120]}"
     if ev == "denied":
         return f"denied by {e.get('by')}"
-    if ev == "blocked_scope":
+    if ev in {"blocked_scope", "scope_blocked"}:
         return "blocked by scope guard"
     return "no tool bound"
 
 
+def _sandboxed(events: list[dict]) -> bool:
+    return any(e.get("event") == "sandbox_run" for e in events)
+
+
 def _detail(e: dict) -> str:
-    skip = {"ts", "event", "action", "target"}
+    skip = {"ts", "event", "action", "target", "seq", "prev_hash", "hash", "assessment"}
     return "; ".join(f"{k}={v}" for k, v in e.items() if k not in skip)[:200].replace("|", "/")
 
 
@@ -198,6 +207,12 @@ def limitations(ctx: dict) -> list[str]:
         "Human approvals: " + (", ".join(f"{e['action']} -> {e['target']}: {'approved' if e['approved'] else 'denied'} by {e['by']}" for e in appr) or "none requested"),
         f"Assessment timestamps: started {meta.get('started', 'n/a')}, finished {meta.get('finished', 'n/a')} ({meta.get('run time', 'n/a')}).",
     ]
+    if _sandboxed(ev):
+        out[0] = ("Testing limitations: unauthenticated, black-box checks only; no exploitation, credentialed "
+                  "scanning, fuzzing or business-logic testing. Nikto was not run (the sandbox image ships nmap and curl only).")
+        out[2] = "Assumptions: the lab app on the internal Docker network stands in for the client asset; real exposure depends on how it is deployed."
+        out[3] = ("Integrations disclosed in section 2: Nmap and the header check ran live, each in a capped throwaway "
+                  "container; Nikto was not run in this mode; ZAP, Nessus, OpenVAS, Burp and Metasploit are planned, not implemented.")
     return out
 
 
