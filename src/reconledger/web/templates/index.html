@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>New assessment</h1>
+<p>Targets come from a fixed list of lab services. Every active step waits for your approval and runs in its own throwaway container.</p>
+<form method="post" action="/assessments">
+  <label for="target">Lab target</label>
+  <select id="target" name="target">
+    {% for t in targets %}<option value="{{ t.id }}">{{ t.label }} ({{ t.host }}, ports {{ t.ports }})</option>{% endfor %}
+  </select>
+  <button type="submit">Start</button>
+</form>
+<h2>Assessments</h2>
+{% if assessments %}
+<table>
+  <tr><th>ID</th><th>Target</th><th>Status</th><th>Steps</th><th>Findings</th></tr>
+  {% for a in assessments %}
+  <tr><td><a href="/assessments/{{ a.id }}">{{ a.id }}</a></td><td>{{ a.target.label }}</td><td>{{ a.status }}</td><td>{{ a.steps|length }}</td><td>{{ a.findings|length }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}<p>No assessments yet.</p>{% endif %}
+{% endblock %}

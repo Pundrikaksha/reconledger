@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Ledger</h1>
+<p>Every entry includes the hash of the one before it, so editing, dropping or reordering an entry breaks the chain.</p>
+{% include "events.html" %}
+{% endblock %}

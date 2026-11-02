@@ -1,0 +1,6 @@
+<table>
+  <tr><th>Seq</th><th>Time</th><th>Event</th><th>Action</th><th>Target</th><th>Detail</th><th>Hash</th></tr>
+  {% for e in events %}
+  <tr><td>{{ e.seq }}</td><td>{{ e.ts|clock }}</td><td>{{ e.event }}</td><td>{{ e.action }}</td><td><code>{{ e.target }}</code></td><td>{{ e|detail }}</td><td><code title="{{ e.hash }}">{{ e.hash[:12] }}</code></td></tr>
+  {% endfor %}
+</table>

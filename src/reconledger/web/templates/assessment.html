@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ a.target.label }}</h1>
+<p>Assessment <code>{{ a.id }}</code>, status <span class="status">{{ a.status }}</span>{% if a.status != "running" %} · <a href="/assessments/{{ a.id }}/report.md">Download report (Markdown)</a>{% endif %}</p>
+
+<h2>Plan</h2>
+{% for s in a.steps %}
+<div class="step {{ s.status }}">
+  <div><strong>{{ s.id }}. {{ s.name }}</strong> → <code>{{ s.target }}</code> · <span class="status">{{ s.status|replace("_", " ") }}</span></div>
+  <div>Reason: {{ s.reason }}</div>
+  <div>Risk: {{ s.risk_note }}</div>
+  {% if s.status == "awaiting_approval" %}
+  <form method="post" action="/assessments/{{ a.id }}/steps/{{ s.id }}/decision">
+    <label for="reason-{{ s.id }}">Your reason (required)</label>
+    <input type="text" id="reason-{{ s.id }}" name="reason" required maxlength="500">
+    <button type="submit" name="decision" value="approve">Approve</button>
+    <button type="submit" name="decision" value="reject">Reject</button>
+  </form>
+  {% endif %}
+  {% if s.decided_by %}<div>Decision: {{ "approved" if s.decision else "rejected" }} by {{ s.decided_by }}: {{ s.decision_reason }}</div>{% endif %}
+  {% if s.new_findings is not none %}<div>Raw findings: {{ s.new_findings }}</div>{% endif %}
+  {% if s.error %}<div class="bad">Error: {{ s.error }}</div>{% endif %}
+  {% if s.sandbox %}
+  <div>Sandbox: <code>{{ s.sandbox.container }}</code>, outcome {{ s.sandbox.outcome }}, exit {{ s.sandbox.exit_code }}, {{ s.sandbox.duration_s }} s,
+    destroyed: {% if s.sandbox.destroyed %}<span class="ok">yes</span>{% else %}<span class="bad">NOT CONFIRMED</span>{% endif %}</div>
+  <div>Caps: {{ s.sandbox.caps.memory }} memory, {{ s.sandbox.caps.cpus }} CPU, {{ s.sandbox.caps.pids }} PIDs, {{ s.sandbox.caps.timeout|int }} s wall clock, network {{ s.sandbox.network }}</div>
+  <div>Output SHA-256: <code>{{ s.sandbox.output_sha256 }}</code></div>
+  {% endif %}
+</div>
+{% else %}
+<p>Waiting for the planner.</p>
+{% endfor %}
+
+<h2>Findings</h2>
+{% if a.findings %}
+<table>
+  <tr><th>Score</th><th>Severity</th><th>Asset</th><th>Finding</th><th>Sources</th></tr>
+  {% for f in a.findings %}
+  <tr><td>{{ "%.1f"|format(f.score) }}</td><td>{{ f.score|severity }}</td><td>{{ f.target }}</td><td>{{ f.title }}</td><td>{{ f.source }}</td></tr>
+  {% endfor %}
+</table>
+{% elif a.status == "running" %}<p>Findings are correlated and ranked when the run finishes.</p>
+{% else %}<p>No findings.</p>{% endif %}
+
+<h2>Ledger for this assessment</h2>
+{% include "events.html" %}
+{% endblock %}

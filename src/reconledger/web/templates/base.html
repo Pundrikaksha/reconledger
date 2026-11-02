@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ReconLedger</title>
+{% if auto_refresh %}<meta http-equiv="refresh" content="3">{% endif %}
+<style>
+body { font: 15px/1.45 system-ui, sans-serif; margin: 0 auto; max-width: 1100px; padding: 1rem; color: #1b1f24; }
+nav { display: flex; gap: 1rem; align-items: baseline; border-bottom: 1px solid #d0d7de; padding-bottom: .5rem; }
+nav .brand { font-weight: 600; }
+table { border-collapse: collapse; width: 100%; margin: .5rem 0 1.5rem; }
+th, td { border: 1px solid #d0d7de; padding: .3rem .5rem; text-align: left; vertical-align: top; font-size: 14px; }
+th { background: #f6f8fa; }
+code { font-size: 13px; word-break: break-all; }
+.step { border: 1px solid #d0d7de; border-radius: 6px; padding: .6rem .8rem; margin: .5rem 0; }
+.awaiting_approval { border: 2px solid #9a6700; background: #fff8e5; }
+.status { font-weight: 600; }
+.bad { color: #b42318; font-weight: 600; }
+.ok { color: #116329; font-weight: 600; }
+.note { background: #f6f8fa; border-left: 4px solid #57606a; padding: .4rem .7rem; }
+input[type=text] { width: 60%; padding: .3rem; }
+button { padding: .3rem .8rem; }
+</style>
+</head>
+<body>
+<nav>
+  <a class="brand" href="/">ReconLedger</a>
+  <a href="/ledger">Ledger</a>
+  <span>Chain:
+    {% if chain_intact %}<span class="ok">intact</span>{% else %}<span class="bad">BROKEN at seq {{ chain_bad }}</span>{% endif %}
+  </span>
+  <span>Planner: {% if llm_label %}deterministic + LLM ({{ llm_label }}){% else %}deterministic{% endif %}</span>
+</nav>
+{% if dry_run %}<p class="note"><strong>Dry run:</strong> sandbox commands are built and logged but nothing is executed, so there are no real findings.</p>{% endif %}
+{% block content %}{% endblock %}
+</body>
+</html>
