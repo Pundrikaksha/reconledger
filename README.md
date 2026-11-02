@@ -4,6 +4,68 @@
 
 > Status: working lab loop covering PS1 (Track 1, AI VAPT): 3 live tools (network + web), PDF report, explain-why per finding. Built for the DataOps Innovation Hackathon 2026 by The Unique Trader Team.
 
+## Vultr Agent Rush: Blast Radius Zero
+This branch adapts the earlier ReconLedger prototype (the CLI loop described below) for the lablab.ai Vultr Agent Rush challenge "Blast Radius Zero": a web-based agent that plans a task, sends each action into an isolated sandbox and returns verifiable output.
+
+```text
+browser ──> control layer (FastAPI on a Vultr VM)
+              │  planner: deterministic LabPlanner, optionally advised by
+              │           Vultr Serverless Inference (menu of allowed steps only)
+              │  human approval: Approve / Reject with a required reason
+              │  one throwaway Docker container per approved step ──> internal lab network
+              └  hash-chained ledger + Markdown report
+```
+
+Scores and rankings stay deterministic. The LLM only suggests an order for steps from a fixed menu and rewrites narration; it never touches a score and cannot skip approval.
+
+### The four containment guarantees
+| Guarantee | How it is enforced | Code |
+|---|---|---|
+| Process isolation | Own container per step: `--read-only` with a small `--tmpfs /tmp`, `--cap-drop ALL`, `no-new-privileges`, non-root `--user`, no mounts or published ports. The final argv is checked, and any network Docker doesn't report as internal is refused before the container starts. | `sandbox.py`: `build_argv`, `_assert_contained`, `_check_network`; `lab/docker-compose.yml` |
+| No secrets inside | No `-e` or `--env-file` is ever built. The docker CLI itself gets only an allow-listed environment. The LLM key stays in the control layer, and the sandbox has no route to the LLM API. | `sandbox.py`: `_cli_env`; `llm_vultr.py` |
+| Resource limits on every run | `--memory` 256m with swap disabled, `--cpus` 0.5, `--pids-limit` 128, a wall-clock timeout, and a cap on captured output. | `sandbox.py`: `SandboxCaps`, `subprocess_executor` |
+| Destroyed after each task | `--rm`, then `docker kill` and `docker rm -f` in a `finally`, then a check that the container is gone. The result is logged as `destroyed`. | `sandbox.py`: `SandboxRunner.run`, `_teardown` |
+
+Before any of this, the scope guard blocks out-of-scope targets without calling Docker, and the web UI only offers a fixed list of lab targets. Each `sandbox_run` ledger entry records the caps, image, container, duration, outcome and SHA-256 of the output.
+
+**Verification status:** the unit tests use a fake Docker executor. Run `reconledger demo-containment` on a Docker host to check the guarantees at runtime; `--dry-run` only checks the commands.
+
+### Environment variables
+Copy `.env.example` to `.env`. The app reads the process environment and does not load `.env` itself, so export the values first (for example `set -a; . ./.env; set +a`).
+
+| Variable | Purpose |
+|---|---|
+| `LLM_PROVIDER` | `vultr`, `mock`, or unset for no LLM (fully deterministic) |
+| `LLM_BASE_URL` | Default `https://api.vultrinference.com/v1`. Must be https, or http on loopback |
+| `LLM_API_KEY` | Required for `vultr` |
+| `LLM_MODEL` | Required for `vultr`; no default model |
+| `LLM_TIMEOUT` | Seconds, default 20 |
+| `WEB_BASIC_AUTH_USER`, `WEB_BASIC_AUTH_PASS` | HTTP basic auth. Required unless bound to loopback |
+| `RECONLEDGER_WEB_LEDGER` | Ledger file, default `out/web-ledger.jsonl` |
+| `RECONLEDGER_SANDBOX_IMAGE`, `RECONLEDGER_SANDBOX_NETWORK` | Defaults `reconledger-sandbox:latest`, `reconledger-lab` |
+
+### Run it
+```bash
+pip install -e ".[dev,web]"
+docker compose -f lab/docker-compose.yml up -d     # creates the internal reconledger-lab network
+docker build -t reconledger-sandbox:latest -f deploy/sandbox/Dockerfile.sandbox deploy/sandbox
+
+reconledger web                       # http://127.0.0.1:8080 (or: python -m reconledger.web)
+reconledger web --dry-run             # try the UI without Docker; nothing is executed
+
+reconledger demo-containment          # PASS/FAIL for all four guarantees (or: python scripts/containment_demo.py)
+reconledger demo-containment --dry-run
+```
+Non-loopback binds refuse to start without basic auth. Basic auth sends the password with every request, so put TLS in front of any non-loopback deployment.
+
+### Known limits
+- The sandbox image ships `nmap` and `curl`, so Nikto is not part of the sandboxed flow. The CLI `assess` loop still runs it, unsandboxed.
+- Juice Shop and DVWA are also on the Compose default network so their `127.0.0.1` ports keep working. A sandbox could only reach the internet through them by exploiting an app, such as an SSRF bug. ReconLedger's tools send no such payloads.
+- The ledger detects tampering but cannot prevent a rewrite of the whole file. Keep the head hash, shown in each report, somewhere else if that matters.
+- Assessments live in memory and are lost on restart. The ledger file persists.
+
+**TODO (V5):** Vultr VM deploy scripts and TLS termination are not written yet.
+
 ## Features
 - **Agent loop in rounds:** plan → scope check → human approval (active steps) → run tool → correlate → rank → report. After each round the planner sees all findings and proposes follow-ups (e.g. a header check on every web port nmap found open).
 - **Real tool runners:** `nmap` TCP connect scan (`-sT -Pn -oX -`), an HTTP security-header check (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, wildcard CORS, Server / X-Powered-By leaks, cookie flags, plain HTTP) and a `nikto` web scan (`-Format json`, time-boxed). Each has a pure parser into the common `Finding` model.
@@ -133,7 +195,12 @@ Stop the lab: `docker compose -f lab/docker-compose.yml down`.
 | `src/reconledger/explain.py` | per-finding explain-why (+ optional LLM hook) |
 | `src/reconledger/kb.py` | CWE / OWASP / remediation knowledge base |
 | `src/reconledger/integrations.py` | live / import / planned tool matrix |
-| `src/reconledger/audit.py` | JSONL audit trail |
+| `src/reconledger/audit.py` | JSONL audit trail + hash-chained `LedgerLog` |
+| `src/reconledger/sandbox.py` | Docker sandbox runner: caps, teardown, lab target list, sandboxed tool bindings |
+| `src/reconledger/llm_vultr.py` | Vultr Serverless Inference / mock LLM, validated plan suggestions |
+| `src/reconledger/web/` | FastAPI approve/reject control layer |
+| `src/reconledger/containment_demo.py` | Containment demo (`scripts/containment_demo.py` wraps it) |
+| `deploy/sandbox/Dockerfile.sandbox` | Minimal sandbox tools image |
 
 ## Safety
 All security testing runs only against the local sandboxed lab. ReconLedger never targets third-party systems: the scope guard only accepts loopback and private ranges, and both the agent and each runner enforce it.
@@ -142,7 +209,7 @@ All security testing runs only against the local sandboxed lab. ReconLedger neve
 - Severity is a rules-based 0-10 score, not a computed CVSS vector.
 - Nikto signatures are noisy on single-page apps; validation down-ranks but never deletes them.
 - ZAP, Nessus/OpenVAS, Burp and Metasploit are planned, not implemented.
-- The planner is rule-based (`LabPlanner`); a free-text conversational / LLM planner is not built yet.
+- The planner is rule-based (`LabPlanner`). In the web UI an LLM can suggest an order for steps from a fixed menu; a free-text conversational planner is not built yet.
 
 ## License
 MIT. See [LICENSE](LICENSE).

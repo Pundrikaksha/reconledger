@@ -3,6 +3,8 @@
   reconledger triage samples/findings.json            # passive: score + rank existing findings
   reconledger assess --target 127.0.0.1 --ports 3000  # lab loop: plan -> approve -> scan -> rank
   reconledger assess ... --non-interactive --approve-plan approved-plan.json --pdf out/report.pdf
+  reconledger web                                     # web approve/reject UI, sandboxed steps
+  reconledger demo-containment [--dry-run]            # prove the sandbox guarantees
 """
 from __future__ import annotations
 
@@ -64,7 +66,26 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--sign-off", default=None,
                    help="analyst name approving the final report (otherwise it stays DRAFT)")
     a.add_argument("--no-nikto", action="store_true", help="do not plan Nikto scans")
+
+    w = sub.add_parser("web", help="start the web approve/reject control layer (needs the [web] extra)")
+    w.add_argument("--host", default="127.0.0.1")
+    w.add_argument("--port", type=int, default=8080)
+    w.add_argument("--dry-run", action="store_true", help="build sandbox commands but run nothing")
+
+    d = sub.add_parser("demo-containment", help="prove the sandbox containment guarantees")
+    d.add_argument("--dry-run", action="store_true", help="check commands only; run nothing")
     args = p.parse_args(argv)
+
+    if args.cmd == "demo-containment":
+        from .containment_demo import run_demo
+        return run_demo(dry_run=args.dry_run)
+    if args.cmd == "web":
+        try:
+            from .web.app import serve
+        except ImportError:
+            print('the web UI needs the extra: pip install -e ".[web]"', file=sys.stderr)
+            return 2
+        return serve(args.host, args.port, dry_run=args.dry_run)
 
     rules = JsonRulesEngine.from_file(args.rules)
     if args.cmd == "triage":
