@@ -1,5 +1,7 @@
 # ReconLedger sandbox lab. Every port is bound to 127.0.0.1 ONLY.
 # These apps are deliberately vulnerable: never expose them to a network.
+# For VM deployment, use deploy/vultr/docker-compose.yml where the lab apps have
+# no host ports and no default network.
 #   docker compose -f lab/docker-compose.yml up -d             # Juice Shop
 #   docker compose -f lab/docker-compose.yml --profile dvwa up -d   # + DVWA
 #   docker compose -f lab/docker-compose.yml down

@@ -14,6 +14,7 @@ import os
 import secrets
 import sys
 import threading
+import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -35,8 +36,8 @@ from ..rules import JsonRulesEngine
 from ..sandbox import LAB_TARGETS, Executor, LabTarget, SandboxResult, SandboxRunner, sandbox_tools
 from ..scope import ScopeGuard
 
-MAX_ACTIVE = 3             # assessments running at once
 APPROVAL_TIMEOUT = 1800.0  # an unanswered step is denied, never left to run later
+MAX_ACTIVE = 3
 MAX_REASON = 500
 MAX_BODY = 16_384
 MAX_NARRATED_FINDINGS = 8
@@ -233,13 +234,45 @@ class Assessment:
 def create_app(*, ledger: LedgerLog | None = None, executor: Executor | None = None,
                dry_run: bool = False, targets: tuple[LabTarget, ...] = LAB_TARGETS,
                bind_host: str = "127.0.0.1", approval_timeout: float = APPROVAL_TIMEOUT,
-               rules_path: str = DEFAULT_RULES) -> FastAPI:
+               rules_path: str = DEFAULT_RULES,
+               rate_limit_per_min: int | None = None,
+               max_active_assessments: int | None = None) -> FastAPI:
     user = os.environ.get("WEB_BASIC_AUTH_USER", "")
     password = os.environ.get("WEB_BASIC_AUTH_PASS", "")
     if bool(user) != bool(password):
         raise ValueError("set both WEB_BASIC_AUTH_USER and WEB_BASIC_AUTH_PASS, or neither")
     if not user and not _is_loopback(bind_host):
         raise ValueError(f"refusing to bind {bind_host} without WEB_BASIC_AUTH_USER/WEB_BASIC_AUTH_PASS")
+
+    if rate_limit_per_min is None:
+        rate_limit_raw = os.environ.get("WEB_RATE_LIMIT_PER_MIN", "0").strip()
+        try:
+            rate_limit_per_min = int(rate_limit_raw) if rate_limit_raw else 0
+        except ValueError:
+            rate_limit_per_min = 0
+
+    if max_active_assessments is None:
+        raw = os.environ.get("WEB_MAX_ACTIVE_ASSESSMENTS")
+        if raw is None or not raw.strip():
+            max_active_assessments = MAX_ACTIVE
+        else:
+            try:
+                val = int(raw.strip())
+                max_active_assessments = val if val >= 0 else MAX_ACTIVE
+            except ValueError:
+                max_active_assessments = MAX_ACTIVE
+
+    trust_proxy = os.environ.get("WEB_TRUST_PROXY", "").strip() == "1"
+
+    post_history: dict[str, list[float]] = {}
+    rate_limit_lock = threading.Lock()
+
+    def get_client_key(req: Request) -> str:
+        if trust_proxy:
+            xff = req.headers.get("x-forwarded-for", "")
+            if xff:
+                return xff.split(",")[0].strip()
+        return req.client.host if req.client else "unknown"
 
     app = FastAPI(title="ReconLedger", docs_url=None, redoc_url=None, openapi_url=None)
     ledger = ledger if ledger is not None else LedgerLog()
@@ -251,6 +284,7 @@ def create_app(*, ledger: LedgerLog | None = None, executor: Executor | None = N
     llm_label = (os.environ.get("LLM_PROVIDER", "").strip().lower() or "") if llm else ""
     app.state.assessments = assessments
     app.state.ledger = ledger
+    app.state.post_history = post_history
 
     def page(name: str, **ctx) -> HTMLResponse:
         intact, bad = ledger.verify()
@@ -294,6 +328,21 @@ def create_app(*, ledger: LedgerLog | None = None, executor: Executor | None = N
             if hdrs.get("sec-fetch-site") == "cross-site" or (
                     origin is not None and urlparse(origin).netloc != hdrs.get("host")):
                 return PlainTextResponse("cross-site request refused", 403)
+            if rate_limit_per_min > 0:
+                client_key = get_client_key(request)
+                now = time.monotonic()
+                cutoff = now - 60.0
+                with rate_limit_lock:
+                    if len(post_history) > 10_000:
+                        dead = [k for k, ts in post_history.items() if not any(t > cutoff for t in ts)]
+                        for k in dead:
+                            del post_history[k]
+                    valid = [t for t in post_history.get(client_key, []) if t > cutoff]
+                    if len(valid) >= rate_limit_per_min:
+                        post_history[client_key] = valid
+                        return PlainTextResponse("rate limit exceeded", 429)
+                    valid.append(now)
+                    post_history[client_key] = valid
         request.state.who = f"web:{user}" if user else "web:local-operator"
         return await call_next(request)
 
@@ -310,8 +359,8 @@ def create_app(*, ledger: LedgerLog | None = None, executor: Executor | None = N
                           by=request.state.who, error="target is not on the fixed lab list")
             raise HTTPException(400, "target is not on the fixed lab list")
         with create_lock:
-            if sum(a.status == "running" for a in assessments.values()) >= MAX_ACTIVE:
-                raise HTTPException(429, f"at most {MAX_ACTIVE} assessments may run at once")
+            if max_active_assessments > 0 and sum(a.status == "running" for a in assessments.values()) >= max_active_assessments:
+                raise HTTPException(429, f"at most {max_active_assessments} assessments may run at once")
             a = Assessment(target, ledger, rules, llm, executor, dry_run, approval_timeout)
             assessments[a.id] = a
         a.audit.record("assessment_start", target=target.host, by=request.state.who,

@@ -24,7 +24,8 @@ def handler(command):
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    for name in ("WEB_BASIC_AUTH_USER", "WEB_BASIC_AUTH_PASS", "LLM_PROVIDER", "LLM_API_KEY", "LLM_MODEL"):
+    for name in ("WEB_BASIC_AUTH_USER", "WEB_BASIC_AUTH_PASS", "LLM_PROVIDER", "LLM_API_KEY", "LLM_MODEL",
+                 "WEB_RATE_LIMIT_PER_MIN", "WEB_MAX_ACTIVE_ASSESSMENTS", "WEB_TRUST_PROXY"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -199,10 +200,91 @@ def test_html_is_escaped():
 
 
 def test_concurrent_assessments_are_capped():
+    # unset WEB_MAX_ACTIVE_ASSESSMENTS defaults to MAX_ACTIVE = 3
     client, _, _ = make()
     for _ in range(3):
         start(client)
     assert client.post("/assessments", data={"target": "juice-shop"}).status_code == 429
+
+
+def test_concurrent_assessments_invalid_env_defaults_to_cap(monkeypatch):
+    monkeypatch.setenv("WEB_MAX_ACTIVE_ASSESSMENTS", "invalid_value")
+    client, _, _ = make()
+    for _ in range(3):
+        start(client)
+    assert client.post("/assessments", data={"target": "juice-shop"}).status_code == 429
+
+
+def test_concurrent_assessments_unlimited(monkeypatch):
+    monkeypatch.setenv("WEB_MAX_ACTIVE_ASSESSMENTS", "0")
+    client, _, _ = make()
+    for _ in range(4):
+        start(client)
+    assert len(client.app.state.assessments) == 4
+
+
+def test_post_rate_limiting(monkeypatch):
+    monkeypatch.setenv("WEB_RATE_LIMIT_PER_MIN", "2")
+    client, _, _ = make()
+    # 2 POST requests succeed
+    assert client.post("/assessments", data={"target": "juice-shop"}).status_code == 303
+    assert client.post("/assessments", data={"target": "juice-shop"}).status_code == 303
+    # 3rd POST request is rate limited
+    resp = client.post("/assessments", data={"target": "juice-shop"})
+    assert resp.status_code == 429
+    assert "rate limit exceeded" in resp.text
+    # GET requests are not rate limited
+    assert client.get("/").status_code == 200
+    assert client.get("/").status_code == 200
+
+
+def test_rate_limiting_trusted_proxy_uses_leftmost_xff(monkeypatch):
+    monkeypatch.setenv("WEB_RATE_LIMIT_PER_MIN", "2")
+    monkeypatch.setenv("WEB_TRUST_PROXY", "1")
+    client, _, _ = make()
+    headers_client1 = {"X-Forwarded-For": "203.0.113.10, 10.0.0.1"}
+    headers_client2 = {"X-Forwarded-For": "203.0.113.20, 10.0.0.1"}
+
+    assert client.post("/assessments", data={"target": "juice-shop"}, headers=headers_client1).status_code == 303
+    assert client.post("/assessments", data={"target": "juice-shop"}, headers=headers_client1).status_code == 303
+    # 3rd request from client 1 hits rate limit
+    assert client.post("/assessments", data={"target": "juice-shop"}, headers=headers_client1).status_code == 429
+
+    # client 2 has its own quota
+    assert client.post("/assessments", data={"target": "juice-shop"}, headers=headers_client2).status_code == 303
+
+
+def test_rate_limiting_untrusted_proxy_ignores_xff(monkeypatch):
+    monkeypatch.setenv("WEB_RATE_LIMIT_PER_MIN", "2")
+    # WEB_TRUST_PROXY is not set
+    client, _, _ = make()
+    headers_client1 = {"X-Forwarded-For": "203.0.113.10"}
+    headers_client2 = {"X-Forwarded-For": "203.0.113.20"}
+
+    assert client.post("/assessments", data={"target": "juice-shop"}, headers=headers_client1).status_code == 303
+    assert client.post("/assessments", data={"target": "juice-shop"}, headers=headers_client2).status_code == 303
+    # Since proxy is not trusted, client host is used for both, so 3rd POST returns 429
+    assert client.post("/assessments", data={"target": "juice-shop"}, headers=headers_client2).status_code == 429
+
+
+def test_rate_limiter_prunes_expired_entries(monkeypatch):
+    monkeypatch.setenv("WEB_RATE_LIMIT_PER_MIN", "10")
+    monkeypatch.setenv("WEB_MAX_ACTIVE_ASSESSMENTS", "0")
+    client, app, _ = make()
+    old_ts = time.monotonic() - 100.0
+    # Seed post_history with > 10,000 stale entries
+    for i in range(10_005):
+        app.state.post_history[f"stale-{i}"] = [old_ts]
+    app.state.post_history["active-client"] = [time.monotonic() - 5.0]
+
+    assert len(app.state.post_history) == 10_006
+    # POST request should trigger pruning since len > 10,000
+    resp = client.post("/assessments", data={"target": "juice-shop"})
+    assert resp.status_code == 303
+    # Expired entries removed, active-client and current request client remain
+    assert "stale-0" not in app.state.post_history
+    assert "active-client" in app.state.post_history
+    assert len(app.state.post_history) == 2
 
 
 def test_cross_site_post_is_refused():

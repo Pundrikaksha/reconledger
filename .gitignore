@@ -12,3 +12,6 @@ audit/*.jsonl
 *.egg-info/
 build/
 dist/
+deploy/vultr/.env
+!deploy/vultr/.env.example
+deploy/vultr/out/

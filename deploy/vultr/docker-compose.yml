@@ -1,0 +1,97 @@
+# ReconLedger single-VM deployment on Vultr Cloud Compute.
+# Run from repo root: docker compose -f deploy/vultr/docker-compose.yml up -d
+# Or via Makefile: make -C deploy/vultr up
+#
+# Blast Radius Zero isolation model:
+#   - caddy: public TLS entrypoint on edge network; proxies to control:8080.
+#   - control: orchestrator on edge network only; launches ephemeral sibling sandboxes.
+#              Never attached to the lab network; read-only root with tmpfs /tmp.
+#   - juice-shop & dvwa: lab targets attached ONLY to internal sandbox-lab (reconledger-lab).
+#                        No host ports and no default network. Completely isolated from the internet.
+#   - sandbox containers: created at runtime on reconledger-lab by SandboxRunner.
+
+services:
+  caddy:
+    image: caddy:2
+    container_name: rl-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - edge
+    environment:
+      - RECONLEDGER_DOMAIN=${RECONLEDGER_DOMAIN:?set RECONLEDGER_DOMAIN in deploy/vultr/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - control
+
+  control:
+    build:
+      context: ../..
+      dockerfile: deploy/vultr/Dockerfile.control
+    container_name: rl-control
+    restart: unless-stopped
+    networks:
+      - edge
+    # No published ports: accessible only via Caddy reverse proxy on edge network
+    volumes:
+      # control launches the per-step sandbox containers as siblings; it is never attached to the lab network
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ledger_data:/app/out
+    env_file:
+      - .env
+    environment:
+      - RECONLEDGER_WEB_LEDGER=/app/out/web-ledger.jsonl
+      - WEB_TRUST_PROXY=1
+      - DOCKER_CONFIG=/tmp/.docker
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    container_name: rl-juice
+    restart: unless-stopped
+    networks:
+      sandbox-lab:
+        ipv4_address: 172.30.0.10
+
+  dvwa:
+    image: vulnerables/web-dvwa:latest
+    container_name: rl-dvwa
+    profiles: ["dvwa"]
+    restart: unless-stopped
+    networks:
+      sandbox-lab:
+        ipv4_address: 172.30.0.20
+
+  sandbox-image:
+    # Build-only: never started by `up`; no network if someone runs it by hand.
+    image: reconledger-sandbox:latest
+    profiles: ["build"]
+    network_mode: none
+    build:
+      context: ../..
+      dockerfile: deploy/sandbox/Dockerfile.sandbox
+
+networks:
+  edge:
+  sandbox-lab:
+    name: reconledger-lab
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+volumes:
+  caddy_data:
+  caddy_config:
+  ledger_data:

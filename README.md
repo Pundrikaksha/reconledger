@@ -64,7 +64,8 @@ Non-loopback binds refuse to start without basic auth. Basic auth sends the pass
 - The ledger detects tampering but cannot prevent a rewrite of the whole file. Keep the head hash, shown in each report, somewhere else if that matters.
 - Assessments live in memory and are lost on restart. The ledger file persists.
 
-**TODO (V5):** Vultr VM deploy scripts and TLS termination are not written yet.
+### Deploy on Vultr
+For deploying ReconLedger on a single Vultr Cloud Compute VM (Ubuntu 24.04) with automatic HTTPS (Caddy) and complete lab isolation (Blast Radius Zero), follow the step-by-step instructions in [`deploy/vultr/RUNBOOK.md`](deploy/vultr/RUNBOOK.md).
 
 ## Features
 - **Agent loop in rounds:** plan → scope check → human approval (active steps) → run tool → correlate → rank → report. After each round the planner sees all findings and proposes follow-ups (e.g. a header check on every web port nmap found open).
@@ -201,6 +202,7 @@ Stop the lab: `docker compose -f lab/docker-compose.yml down`.
 | `src/reconledger/web/` | FastAPI approve/reject control layer |
 | `src/reconledger/containment_demo.py` | Containment demo (`scripts/containment_demo.py` wraps it) |
 | `deploy/sandbox/Dockerfile.sandbox` | Minimal sandbox tools image |
+| `deploy/vultr/` | Single-VM Vultr deploy: Dockerfile.control, docker-compose.yml, Caddyfile, cloud-init, Makefile, RUNBOOK |
 
 ## Safety
 All security testing runs only against the local sandboxed lab. ReconLedger never targets third-party systems: the scope guard only accepts loopback and private ranges, and both the agent and each runner enforce it.

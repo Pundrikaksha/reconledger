@@ -1,0 +1,37 @@
+#cloud-config
+# ReconLedger - Vultr Cloud Compute (Ubuntu 24.04) User-Data
+# Installs Docker, git, ufw; configures firewall; enables unattended security updates.
+# No secrets, no credentials. The operator clones the repo manually.
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - docker.io
+  - docker-compose-v2
+  - git
+  - ufw
+  - unattended-upgrades
+  - make
+  - curl
+
+runcmd:
+  # 2 GB swapfile: prevents out-of-memory errors on smallest plans (1 GB RAM)
+  - fallocate -l 2G /swapfile
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - sh -c 'echo "/swapfile none swap sw 0 0" >> /etc/fstab'
+  # Configure UFW: default deny incoming, allow outgoing, allow SSH, HTTP, HTTPS
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw --force enable
+  # Enable Docker service and grant docker group permissions to ubuntu user if present
+  - systemctl enable --now docker
+  - sh -c 'id ubuntu >/dev/null 2>&1 && usermod -aG docker ubuntu || true'
+  # Enable automatic security updates via unattended-upgrades
+  - systemctl enable --now unattended-upgrades
+  - dpkg-reconfigure -f noninteractive unattended-upgrades
