@@ -84,6 +84,32 @@ def test_pdf_written(tmp_path):
             assert s in text, s
 
 
+def test_scope_note_and_report_build():
+    from reconledger.explain import explain
+    from reconledger.report import build
+
+    fs = _ranked()
+    f = fs[0]
+
+    # "172.30.0.10/32" -> contains "private lab network" and "172.30.0.10/32", not "loopback only"
+    e_priv = explain(f, scope="172.30.0.10/32")
+    assert "isolated private lab network" in e_priv.exposure
+    assert "172.30.0.10/32" in e_priv.exposure
+    assert "loopback only" not in e_priv.exposure
+
+    # "127.0.0.0/8, localhost" -> contains "loopback only"
+    e_loop = explain(f, scope="127.0.0.0/8, localhost")
+    assert "loopback only" in e_loop.exposure
+
+    # None -> no crash, fallback used
+    e_none = explain(f, scope=None)
+    assert "local lab allow-list only" in e_none.exposure
+
+    # report.build with meta {"scope allow-list": "172.30.0.10/32"} gives the private-network wording in rows[0]["x"].exposure
+    res = build(fs, meta={"scope allow-list": "172.30.0.10/32"})
+    assert "isolated private lab network" in res["rows"][0]["x"].exposure
+
+
 def test_plan_file_approver_only_allows_listed_steps(tmp_path):
     plan = tmp_path / "plan.json"
     plan.write_text(json.dumps({"analyst": "A. Analyst", "approved": [

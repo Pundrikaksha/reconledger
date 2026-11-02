@@ -7,6 +7,7 @@ to the deterministic version.
 """
 from __future__ import annotations
 
+import ipaddress
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -56,14 +57,46 @@ def validation_status(f: Finding) -> str:
     return "observed by tool; not exploited (no active exploitation performed)"
 
 
-def explain(f: Finding, why_planned: str = "", llm: LLMHook | None = None) -> Explanation:
+def scope_note(allow: str | None) -> str:
+    fallback = "Lab scope: local lab allow-list only, so real-world exposure depends on deployment."
+    if not allow:
+        return fallback
+    entries = [e.strip() for e in allow.split(",") if e.strip()]
+    if not entries:
+        return fallback
+
+    loopback_only = True
+    has_private_non_loopback = False
+
+    for e in entries:
+        if e.lower() == "localhost":
+            continue
+        try:
+            net = ipaddress.ip_network(e, strict=False)
+            if net.is_loopback:
+                continue
+            loopback_only = False
+            if net.is_private:
+                has_private_non_loopback = True
+        except ValueError:
+            return fallback
+
+    if has_private_non_loopback:
+        return f"Lab scope: isolated private lab network ({allow}), so real-world exposure depends on deployment."
+    if loopback_only:
+        return f"Lab scope: loopback only ({allow}), so real-world exposure depends on deployment."
+
+    return fallback
+
+
+def explain(f: Finding, why_planned: str = "", llm: LLMHook | None = None, scope: str | None = None) -> Explanation:
     tags = set(f.tags)
     target = f.target
     if "confirmed-open" in tags or "open-port" in tags:
         exposure = f"{target} accepts TCP connections (confirmed by nmap in this run)."
     else:
         exposure = f"{target} answered the tool over HTTP; reachability not separately port-scanned."
-    exposure += " Lab scope: loopback only, so real-world exposure depends on deployment."
+    exposure += f" {scope_note(scope)}"
 
     expl_bits = []
     if "known-vuln" in tags or f.evidence.get("cve"):

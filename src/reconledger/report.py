@@ -57,12 +57,13 @@ def build(findings: list[Finding], meta: dict[str, Any] | None = None,
     events = events or []
     reasons = plan_reasons(events)
     rows = []
+    scope = (meta or {}).get("scope allow-list")
     for i, f in enumerate(findings, 1):
         src = f.source.split("+")[0]
         host = f.target.split(":")[0]
         why = reasons.get((src, f.target)) or reasons.get((src, host)) or "imported finding (no plan step)"
         rows.append({"n": i, "fid": f"RL-{i:03d}", "f": f, "kb": lookup(f),
-                     "x": explain(f, why, llm=llm)})
+                     "x": explain(f, why, llm=llm, scope=scope)})
     dist = Counter(severity_label(f.score) for f in findings)
     approvals = [e for e in events if e.get("event") == "approval"]
     tool_runs = []
