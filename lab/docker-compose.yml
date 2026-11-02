@@ -3,12 +3,22 @@
 #   docker compose -f lab/docker-compose.yml up -d             # Juice Shop
 #   docker compose -f lab/docker-compose.yml --profile dvwa up -d   # + DVWA
 #   docker compose -f lab/docker-compose.yml down
+#
+# `sandbox-lab` is the only network a sandbox container ever joins. It is
+# internal (no gateway, so no route to the internet or the VM metadata service)
+# and the apps have fixed addresses on it, because 127.0.0.1 inside a sandbox is
+# the sandbox itself. Keep these addresses in sync with LAB_TARGETS in
+# src/reconledger/sandbox.py.
 services:
   juice-shop:
     image: bkimminich/juice-shop:latest
     container_name: rl-juice
     ports:
       - "127.0.0.1:3000:3000"
+    networks:
+      default: {}
+      sandbox-lab:
+        ipv4_address: 172.30.0.10
     restart: "no"
   dvwa:
     image: vulnerables/web-dvwa:latest
@@ -16,4 +26,15 @@ services:
     profiles: ["dvwa"]
     ports:
       - "127.0.0.1:4280:80"
+    networks:
+      default: {}
+      sandbox-lab:
+        ipv4_address: 172.30.0.20
     restart: "no"
+networks:
+  sandbox-lab:
+    name: reconledger-lab
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
