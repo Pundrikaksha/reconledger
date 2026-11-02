@@ -52,7 +52,7 @@ def plan_reasons(events: list[dict]) -> dict[tuple[str, str], str]:
 
 
 def build(findings: list[Finding], meta: dict[str, Any] | None = None,
-          events: list[dict] | None = None, llm=None) -> dict[str, Any]:
+          events: list[dict] | None = None, llm=None, summary_llm=None) -> dict[str, Any]:
     events = events or []
     reasons = plan_reasons(events)
     rows = []
@@ -71,10 +71,26 @@ def build(findings: list[Finding], meta: dict[str, Any] | None = None,
         if e.get("event") == "approval" and not e.get("approved"):
             tool_runs.append({**e, "event": "denied"})
     return {"rows": rows, "dist": dist, "meta": meta or {}, "events": events,
-            "approvals": approvals, "tool_runs": tool_runs}
+            "approvals": approvals, "tool_runs": tool_runs, "llm": llm, "summary_llm": summary_llm}
 
 
 def _exec_summary(ctx: dict) -> str:
+    text = _deterministic_summary(ctx)
+    summary_llm = ctx["summary_llm"]
+    if summary_llm is None or not ctx["rows"]:
+        return text
+    try:
+        rewritten = summary_llm(
+            "Rewrite this executive summary for a client VAPT report in at most 3 sentences, "
+            "keep every number and fact, add nothing:\n" + text)
+        if rewritten and rewritten.strip():
+            return rewritten.strip()
+    except Exception:  # LLM is optional; deterministic text stays
+        pass
+    return text
+
+
+def _deterministic_summary(ctx: dict) -> str:
     rows, dist, meta = ctx["rows"], ctx["dist"], ctx["meta"]
     if not rows:
         return "No findings were produced in this run."
@@ -100,8 +116,9 @@ def _approval_line(ctx: dict) -> str:
 
 # ----------------------------------------------------------------- Markdown
 def to_markdown(findings: list[Finding], title: str = "ReconLedger report",
-                meta: dict[str, Any] | None = None, events: list[dict] | None = None) -> str:
-    ctx = build(findings, meta, events)
+                meta: dict[str, Any] | None = None, events: list[dict] | None = None,
+                *, llm=None, summary_llm=None) -> str:
+    ctx = build(findings, meta, events, llm=llm, summary_llm=summary_llm)
     L = [f"# {title}", ""]
     status = (meta or {}).get("report status")
     if status:
@@ -197,8 +214,34 @@ def limitations(ctx: dict) -> list[str]:
         "Scope blocks: " + ("; ".join(f"{e['action']} -> {e['target']}" for e in blocked) if blocked else "none"),
         "Human approvals: " + (", ".join(f"{e['action']} -> {e['target']}: {'approved' if e['approved'] else 'denied'} by {e['by']}" for e in appr) or "none requested"),
         f"Assessment timestamps: started {meta.get('started', 'n/a')}, finished {meta.get('finished', 'n/a')} ({meta.get('run time', 'n/a')}).",
+        _llm_line(ctx),
     ]
     return out
+
+
+def _llm_line(ctx: dict) -> str:
+    """Describes what actually happened, so call this after the LLM text has been produced."""
+    llm, summary_llm = ctx["llm"], ctx["summary_llm"]
+    if llm is None and summary_llm is None:
+        return "No LLM used; all text deterministic."
+    used = []
+    failed = 0
+    for label, hook in (("model", llm), ("summary model", summary_llm)):
+        stats = getattr(hook, "stats", None)
+        if stats:
+            failed += stats.failed
+            if stats.models:
+                used.append(f"{label} {', '.join(stats.models)}")
+        elif hook is not None:  # plain callable: nothing to report beyond its presence
+            used.append(f"{label} unspecified")
+    if not used:
+        return "LLM rewriting was enabled but no call succeeded; all text deterministic."
+    gateway = getattr(llm or summary_llm, "gateway", "caller-supplied LLM hook")
+    line = (f"Narrative text rewritten via {gateway} ({'; '.join(used)}); scores, evidence and rankings "
+            "are deterministic and were not changed by the LLM.")
+    if failed:
+        line += f" {failed} rewrite(s) failed and kept the deterministic text."
+    return line
 
 
 # ---------------------------------------------------------------------- PDF
@@ -215,11 +258,12 @@ SEV_COLOURS = {"Critical": (128, 0, 0), "High": (200, 40, 40), "Medium": (230, 1
 
 
 def to_pdf(findings: list[Finding], path: str, title: str = "ReconLedger VAPT report",
-           meta: dict[str, Any] | None = None, events: list[dict] | None = None) -> str:
+           meta: dict[str, Any] | None = None, events: list[dict] | None = None,
+           *, llm=None, summary_llm=None) -> str:
     from fpdf import FPDF
     from fpdf.enums import XPos, YPos
 
-    ctx = build(findings, meta, events)
+    ctx = build(findings, meta, events, llm=llm, summary_llm=summary_llm)
     meta = meta or {}
 
     class PDF(FPDF):

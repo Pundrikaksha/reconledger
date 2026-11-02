@@ -115,6 +115,30 @@ Sample output from a real run against Juice Shop (31 Oct 2026; 64 s; 3/3 steps a
 
 Stop the lab: `docker compose -f lab/docker-compose.yml down`.
 
+## Optional: LLM narrative via Otari (Mozilla.ai gateway)
+Off by default: with `RECONLEDGER_LLM_PROVIDER` unset, ReconLedger makes no LLM call and needs no API key. When enabled, the LLM only rewrites narrative text (per-finding summaries and the executive summary paragraph). **Scores, rankings and evidence stay deterministic.** Any failure keeps the deterministic text, and section 6 of the report states what was used.
+
+| Variable | Meaning |
+|---|---|
+| `RECONLEDGER_LLM_PROVIDER` | `otari` to enable; unset, empty or `none` keeps it off |
+| `OTARI_API_KEY` | required; never printed, logged or written to reports |
+| `OTARI_BASE_URL` | default `https://api.otari.ai/api/v1`; requests go to `{base}/chat/completions` |
+| `OTARI_MODEL` | required for finding summaries; an Otari selector such as `provider:model` or `vendor/model`, intended to be an open-weight model. No default |
+| `OTARI_FALLBACK_MODEL` | optional; tried once if the primary call fails (HTTP error, timeout, empty content) |
+| `OTARI_SUMMARY_MODEL` | optional; a second, different open-weight model used only for the executive summary |
+| `OTARI_GUARDRAILS` | `off` (default), `monitor` or `block`; any other value disables the LLM |
+| `OTARI_TIMEOUT` | seconds per request, default 20 |
+
+**Why guardrails:** scanner output (banners, headers, Nikto text) comes from the target, so it is untrusted input to the model. `monitor` or `block` adds Otari's `prompt-injection` guardrail to each request. A 403 means the prompt was blocked: that text stays deterministic, the fallback model is not tried, and the block is counted in the stats line. A 502 counts as an ordinary failure.
+
+```bash
+export OTARI_API_KEY=tk-...your key...
+RECONLEDGER_LLM_PROVIDER=otari OTARI_MODEL=<open-weight model> OTARI_SUMMARY_MODEL=<second open-weight model> \
+  OTARI_FALLBACK_MODEL=<model> OTARI_GUARDRAILS=monitor \
+  reconledger triage samples/findings.json --out out/report.md
+```
+The variable names are also in [`.env.example`](.env.example); `.env` is git-ignored and not loaded automatically. Each run records an `llm_config` audit event (provider, model names, guardrail mode; no key or prompt) and prints a one-line stats summary to stderr.
+
 ## Layout
 | Path | What |
 |---|---|
@@ -131,6 +155,7 @@ Stop the lab: `docker compose -f lab/docker-compose.yml down`.
 | `src/reconledger/ingest.py` | parser registry (`generic-json`, `nmap-xml`, `nikto-json`) + dedup |
 | `src/reconledger/report.py` | Markdown + PDF report (PS1 §7 sections) |
 | `src/reconledger/explain.py` | per-finding explain-why (+ optional LLM hook) |
+| `src/reconledger/llm.py` | optional env-selected LLM hook (Otari gateway), off by default |
 | `src/reconledger/kb.py` | CWE / OWASP / remediation knowledge base |
 | `src/reconledger/integrations.py` | live / import / planned tool matrix |
 | `src/reconledger/audit.py` | JSONL audit trail |

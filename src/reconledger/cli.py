@@ -16,6 +16,7 @@ from .agent import Agent, LabPlanner
 from .approval import cli_approver, deny_all, plan_file_approver
 from .audit import AuditLog
 from .ingest import load
+from .llm import llm_config, make_llm_hook, stats_line
 from .report import to_markdown, to_pdf
 from .rules import JsonRulesEngine
 from .runners import lab_tools
@@ -32,6 +33,12 @@ def _emit(md: str, out: str | None) -> None:
         print(f"report written to {out}")
     else:
         sys.stdout.write(md)
+
+
+def _print_llm_stats(llm, summary_llm) -> None:
+    line = stats_line(llm, summary_llm)
+    if line:
+        print(line, file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -67,12 +74,17 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     rules = JsonRulesEngine.from_file(args.rules)
+    llm = make_llm_hook()
+    summary_llm = make_llm_hook(role="summary")
     if args.cmd == "triage":
         agent = Agent(rules=rules, audit=AuditLog(args.audit))
+        agent.audit.record("llm_config", **llm_config(llm, summary_llm))
         result = agent.run(load(args.input, args.format))
-        _emit(to_markdown(result.findings, events=agent.audit.events), args.out)
+        _emit(to_markdown(result.findings, events=agent.audit.events, llm=llm, summary_llm=summary_llm), args.out)
         if args.pdf:
-            to_pdf(result.findings, args.pdf, "ReconLedger triage report", None, agent.audit.events)
+            to_pdf(result.findings, args.pdf, "ReconLedger triage report", None, agent.audit.events,
+                   llm=llm, summary_llm=summary_llm)
+        _print_llm_stats(llm, summary_llm)
         return 0
 
     scope = ScopeGuard((args.scope or []) + ["127.0.0.0/8", "localhost", "::1/128"])
@@ -102,6 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         approver = cli_approver()
     audit = AuditLog(args.audit)
+    audit.record("llm_config", **llm_config(llm, summary_llm))
     agent = Agent(rules, scope=scope, planner=planner, approver=approver,
                   tools=lab_tools(scope), audit=audit,
                   progress=lambda m: print(m, flush=True))
@@ -128,14 +141,17 @@ def main(argv: list[str] | None = None) -> int:
         "tool errors": "; ".join(res.errors) or "none",
         "findings": len(res.findings),
     }
-    _emit(to_markdown(res.findings, "ReconLedger lab assessment", meta, audit.events), args.out)
+    _emit(to_markdown(res.findings, "ReconLedger lab assessment", meta, audit.events,
+                      llm=llm, summary_llm=summary_llm), args.out)
     if args.pdf:
         Path(args.pdf).parent.mkdir(parents=True, exist_ok=True)
-        to_pdf(res.findings, args.pdf, "ReconLedger VAPT report", meta, audit.events)
+        to_pdf(res.findings, args.pdf, "ReconLedger VAPT report", meta, audit.events,
+               llm=llm, summary_llm=summary_llm)
         print(f"PDF report written to {args.pdf}")
     print(f"{len(res.findings)} findings | executed {len(res.executed)} | "
           f"skipped {len(res.skipped)} | blocked {len(res.blocked)} | errors {len(res.errors)}",
           file=sys.stderr)
+    _print_llm_stats(llm, summary_llm)
     return 0
 
 
