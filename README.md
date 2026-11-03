@@ -2,7 +2,7 @@
 
 **A human-approved AI triage agent for sandboxed security assessments.** It plans, asks before it acts, runs real tools against a localhost lab, correlates what they find, and explains every ranking.
 
-> Status: working lab loop covering PS1 (Track 1, AI VAPT): 3 live tools (network + web), PDF report, explain-why per finding. Built for the DataOps Innovation Hackathon 2026 by The Unique Trader Team.
+> Status: working lab loop covering PS1 (Track 1, AI VAPT): 3 live tools (network + web), PDF report, explain-why per finding. Built for the DataOps Innovation Hackathon 2026 by Recon (Pundrikaksha badal).
 
 ## Features
 - **Agent loop in rounds:** plan → scope check → human approval (active steps) → run tool → correlate → rank → report. After each round the planner sees all findings and proposes follow-ups (e.g. a header check on every web port nmap found open).

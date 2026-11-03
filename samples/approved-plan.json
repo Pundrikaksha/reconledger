@@ -1,5 +1,5 @@
 {
-  "analyst": "Lab analyst (The Unique Trader Team)",
+  "analyst": "Lab analyst (Recon (Pundrikaksha badal))",
   "note": "Pre-approved plan for the unattended demo run. Only these steps on the loopback lab may run; anything else is denied.",
   "approved": [
     {"action": "nmap_scan", "target": "127.0.0.1", "reason": "TCP connect scan of lab ports"},

@@ -1,7 +1,7 @@
 $ reconledger assess --target 127.0.0.1 --ports 3000,4280 --extra-target http://example.com/ --non-interactive --approve-plan samples/approved-plan.json --audit samples/demo-audit.jsonl --out samples/demo-report.md --pdf samples/demo-report.pdf
-[APPROVAL GRANTED by plan-file:Lab analyst (The Unique Trader Team)] nmap_scan -> 127.0.0.1
-[APPROVAL GRANTED by plan-file:Lab analyst (The Unique Trader Team)] header_check -> http://127.0.0.1:3000/
-[APPROVAL GRANTED by plan-file:Lab analyst (The Unique Trader Team)] nikto_scan -> http://127.0.0.1:3000/
+[APPROVAL GRANTED by plan-file:Lab analyst (Recon (Pundrikaksha badal))] nmap_scan -> 127.0.0.1
+[APPROVAL GRANTED by plan-file:Lab analyst (Recon (Pundrikaksha badal))] header_check -> http://127.0.0.1:3000/
+[APPROVAL GRANTED by plan-file:Lab analyst (Recon (Pundrikaksha badal))] nikto_scan -> http://127.0.0.1:3000/
 report written to samples/demo-report.md
 PDF report written to samples/demo-report.pdf
 30 findings | executed 3 | skipped 0 | blocked 1 | errors 0

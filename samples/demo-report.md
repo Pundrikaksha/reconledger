@@ -4,7 +4,7 @@
 
 ## 1. Executive summary and scope
 
-ReconLedger assessed 127.0.0.1 ports 3000,4280 (localhost lab) and recorded 30 findings (0 Critical, 3 High, 3 Medium, 3 Low, 21 Info). The highest-ranked issue is "Exposed directory /ftp/" on 127.0.0.1:3000 (High, 8.0/10). 3 findings were reported by more than one tool and merged; 19 tool hits were validated as likely false positives and down-ranked rather than hidden. No exploitation was performed. 3 of 3 active steps passed the human-approval gate (plan-file:Lab analyst (The Unique Trader Team)).
+ReconLedger assessed 127.0.0.1 ports 3000,4280 (localhost lab) and recorded 30 findings (0 Critical, 3 High, 3 Medium, 3 Low, 21 Info). The highest-ranked issue is "Exposed directory /ftp/" on 127.0.0.1:3000 (High, 8.0/10). 3 findings were reported by more than one tool and merged; 19 tool hits were validated as likely false positives and down-ranked rather than hidden. No exploitation was performed. 3 of 3 active steps passed the human-approval gate (plan-file:Lab analyst (Recon (Pundrikaksha badal))).
 
 - **report status:** DRAFT - pending analyst review
 - **started:** 31 Oct 2026 16:14:37 IST
@@ -802,7 +802,7 @@ ReconLedger assessed 127.0.0.1 ports 3000,4280 (localhost lab) and recorded 30 f
 - Integrations disclosed in section 2: Nmap, Nikto and the header check ran live; ZAP, Nessus, OpenVAS, Burp and Metasploit are planned, not implemented.
 - Scan failures: none
 - Scope blocks: header_check -> http://example.com/
-- Human approvals: nmap_scan -> 127.0.0.1: approved by plan-file:Lab analyst (The Unique Trader Team), header_check -> http://127.0.0.1:3000/: approved by plan-file:Lab analyst (The Unique Trader Team), nikto_scan -> http://127.0.0.1:3000/: approved by plan-file:Lab analyst (The Unique Trader Team)
+- Human approvals: nmap_scan -> 127.0.0.1: approved by plan-file:Lab analyst (Recon (Pundrikaksha badal)), header_check -> http://127.0.0.1:3000/: approved by plan-file:Lab analyst (Recon (Pundrikaksha badal)), nikto_scan -> http://127.0.0.1:3000/: approved by plan-file:Lab analyst (Recon (Pundrikaksha badal))
 - Assessment timestamps: started 31 Oct 2026 16:14:37 IST, finished 31 Oct 2026 16:15:41 IST (64.0 s).
 
 ## Appendix A. Plan, approvals and audit trail
@@ -812,15 +812,15 @@ ReconLedger assessed 127.0.0.1 ports 3000,4280 (localhost lab) and recorded 30 f
 | 31 Oct 2026 16:14:37 IST | run_start |  |  | initial=0 |
 | 31 Oct 2026 16:14:37 IST | round |  |  | n=1; actions=['nmap_scan', 'header_check'] |
 | 31 Oct 2026 16:14:37 IST | planned | nmap_scan | 127.0.0.1 | kind=active; reason=discover which lab services listen on ports 3000,4280 |
-| 31 Oct 2026 16:14:37 IST | approval | nmap_scan | 127.0.0.1 | approved=True; by=plan-file:Lab analyst (The Unique Trader Team); risk_note=TCP connect scan; sends connection attempts to the lab host only |
+| 31 Oct 2026 16:14:37 IST | approval | nmap_scan | 127.0.0.1 | approved=True; by=plan-file:Lab analyst (Recon (Pundrikaksha badal)); risk_note=TCP connect scan; sends connection attempts to the lab host only |
 | 31 Oct 2026 16:14:37 IST | executed | nmap_scan | 127.0.0.1 | new_findings=1 |
 | 31 Oct 2026 16:14:37 IST | planned | header_check | http://example.com/ | kind=active; reason=operator-supplied extra target |
 | 31 Oct 2026 16:14:37 IST | blocked_scope | header_check | http://example.com/ | error=target 'http://example.com/' is outside the lab scope |
 | 31 Oct 2026 16:14:37 IST | round |  |  | n=2; actions=['header_check', 'nikto_scan'] |
 | 31 Oct 2026 16:14:37 IST | planned | header_check | http://127.0.0.1:3000/ | kind=active; reason=Open port 3000/tcp (service guess: ppp) looks like a web app; check its HTTP security headers |
-| 31 Oct 2026 16:14:37 IST | approval | header_check | http://127.0.0.1:3000/ | approved=True; by=plan-file:Lab analyst (The Unique Trader Team); risk_note=one HTTP GET to the lab app; no payloads |
+| 31 Oct 2026 16:14:37 IST | approval | header_check | http://127.0.0.1:3000/ | approved=True; by=plan-file:Lab analyst (Recon (Pundrikaksha badal)); risk_note=one HTTP GET to the lab app; no payloads |
 | 31 Oct 2026 16:14:37 IST | executed | header_check | http://127.0.0.1:3000/ | new_findings=4 |
 | 31 Oct 2026 16:14:37 IST | planned | nikto_scan | http://127.0.0.1:3000/ | kind=active; reason=Open port 3000/tcp (service guess: ppp) is a web service; header checks only see one response, so run Nikto to look for exposed files, directories and known-bad components, then va |
-| 31 Oct 2026 16:14:37 IST | approval | nikto_scan | http://127.0.0.1:3000/ | approved=True; by=plan-file:Lab analyst (The Unique Trader Team); risk_note=~5,000 HTTP requests to the lab app over up to 3 minutes; safe tuning 0123b (no injection or DoS checks) |
+| 31 Oct 2026 16:14:37 IST | approval | nikto_scan | http://127.0.0.1:3000/ | approved=True; by=plan-file:Lab analyst (Recon (Pundrikaksha badal)); risk_note=~5,000 HTTP requests to the lab app over up to 3 minutes; safe tuning 0123b (no injection or DoS checks) |
 | 31 Oct 2026 16:15:41 IST | executed | nikto_scan | http://127.0.0.1:3000/ | new_findings=28 |
 | 31 Oct 2026 16:15:41 IST | ranked |  |  | count=30; top=[('nikto-127.0.0.1:3000-001675-9', 8.0), ('hdr-127.0.0.1:3000-content-security-policy', 7.5), ('hdr-127.0.0.1:3000-cors-wildcard', 7.0), ('nmap-127.0.0.1-3000', 5.5), ('hdr-127.0.0.1:300 |

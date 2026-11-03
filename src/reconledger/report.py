@@ -235,7 +235,7 @@ def to_pdf(findings: list[Finding], path: str, title: str = "ReconLedger VAPT re
             self.set_y(-12)
             self.set_font("Helvetica", "I", 8)
             self.set_text_color(110)
-            self.cell(0, 6, _t(f"ReconLedger - The Unique Trader Team - page {self.page_no()}/{{nb}}"), align="C")
+            self.cell(0, 6, _t(f"ReconLedger - Recon (Pundrikaksha badal) - page {self.page_no()}/{{nb}}"), align="C")
             self.set_text_color(0)
 
     pdf = PDF(format="A4")
@@ -282,7 +282,7 @@ def to_pdf(findings: list[Finding], path: str, title: str = "ReconLedger VAPT re
         if k in meta:
             kv(k.capitalize(), meta[k])
     pdf.ln(4)
-    p("Prepared with ReconLedger by The Unique Trader Team. Lab-only: no third-party systems were tested.", 9, "I")
+    p("Prepared with ReconLedger by Recon (Pundrikaksha badal). Lab-only: no third-party systems were tested.", 9, "I")
 
     pdf.add_page()
     h1("1. Executive summary and scope")
