@@ -111,7 +111,7 @@ reconledger triage samples/findings.json --out out/report.md
 reconledger triage nikto.json --format nikto-json --out out/report.md --pdf out/report.pdf
 ```
 
-Sample output from a real run against Juice Shop (31 Oct 2026; 64 s; 3/3 steps approved by plan file; 1 out-of-scope step blocked; 33 raw tool hits → 30 findings: 3 High, 3 Medium, 3 Low, 21 Info, of which 19 are soft-404 likely false positives; 3 multi-tool merges): [`samples/demo-report.md`](samples/demo-report.md), [`samples/demo-report.pdf`](samples/demo-report.pdf), with its audit trail [`samples/demo-audit.jsonl`](samples/demo-audit.jsonl) and terminal transcript [`samples/demo-transcript.txt`](samples/demo-transcript.txt).
+Sample output from a real run against Juice Shop (31 Oct 2026; 64 s; 3/3 steps approved by plan file; 1 out-of-scope step blocked; 33 raw tool hits → 30 findings: 3 High, 3 Medium, 3 Low, 21 Info, of which 19 are soft-404 likely false positives; 3 multi-tool merges): [`samples/demo-report.md`](samples/demo-report.md) (add `--pdf <file>` to get the same report as a PDF), with its audit trail [`samples/demo-audit.jsonl`](samples/demo-audit.jsonl) and terminal transcript [`samples/demo-transcript.txt`](samples/demo-transcript.txt).
 
 Stop the lab: `docker compose -f lab/docker-compose.yml down`.
 
